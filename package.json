@@ -1,0 +1,64 @@
+{
+  "name": "@kimuson/agent-bridge",
+  "version": "0.0.0",
+  "description": "FIXME",
+  "license": "MIT",
+  "bin": {
+    "agent-bridge": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    "./cli": {
+      "require": "./dist/cli.cjs",
+      "import": "./dist/cli.mjs"
+    },
+    "./sdk": {
+      "require": "./dist/sdk.cjs",
+      "import": "./dist/sdk.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "prepare": "lefthook install",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "lint": "pnpm /^lint:.*/",
+    "lint:oxlint": "oxlint --type-aware --type-check --ignore-path .gitignore --report-unused-disable-directives --tsconfig ./tsconfig.json",
+    "lint:oxfmt": "pnpm fix:oxfmt --check",
+    "fix": "pnpm /^fix:.*/",
+    "fix:oxlint": "pnpm lint:oxlint --fix --fix-suggestions --fix-dangerously",
+    "fix:oxfmt": "oxfmt --ignore-path .gitignore --no-error-on-unmatched-pattern"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.7",
+    "@github/copilot-sdk": "0.1.12",
+    "@modelcontextprotocol/sdk": "1.25.2",
+    "@openai/codex-sdk": "0.84.0",
+    "ajv": "8.17.1",
+    "commander": "14.0.2",
+    "gray-matter": "4.0.3",
+    "zod": "4.3.5",
+    "zod-to-json-schema": "3.25.1"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "0.71.2",
+    "@tsconfig/strictest": "2.0.8",
+    "@types/node": "25.0.8",
+    "@vitest/ui": "4.0.17",
+    "lefthook": "2.0.15",
+    "oxfmt": "0.24.0",
+    "oxlint": "1.39.0",
+    "oxlint-tsgolint": "0.11.0",
+    "tsdown": "0.20.0-beta.3",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "4.0.17"
+  },
+  "packageManager": "pnpm@10.26.1+sha512.664074abc367d2c9324fdc18037097ce0a8f126034160f709928e9e9f95d98714347044e5c3164d65bd5da6c59c6be362b107546292a8eecb7999196e5ce58fa"
+}
