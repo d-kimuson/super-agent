@@ -3,7 +3,7 @@ name: researcher
 description: Research information on the web and provide comprehensive insights
 agents:
   - sdkType: gemini
-    model: gemini-2.0-flash-exp
+    model: gemini-2.5-flash-lite
 ---
 
 Conduct thorough web research to gather accurate and up-to-date information on requested topics.

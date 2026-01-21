@@ -99,6 +99,7 @@ export const GeminiAgentSDKAdapter = (): AgentSDKAdapter => {
         let buffer = '';
         let assistantMessages: string[] = [];
         let sdkSessionId: string | undefined = undefined;
+        let stderrBuffer = '';
 
         child.stdout.on('data', (data: Buffer) => {
           if (abortController.signal.aborted) {
@@ -203,10 +204,14 @@ export const GeminiAgentSDKAdapter = (): AgentSDKAdapter => {
 
                   currentProcess.stoppedPromise.resolve(nextSession);
                 } else {
+                  const errorMessage = stderrBuffer.trim()
+                    ? `Gemini CLI returned error status\n\nStderr:\n${stderrBuffer.trim()}`
+                    : 'Gemini CLI returned error status';
+
                   const nextTurn: FailedTurn = {
                     ...session.currentTurn,
                     status: 'failed',
-                    error: 'Gemini CLI returned error status',
+                    error: errorMessage,
                   };
 
                   const nextSession: FailedSession | PausedSession =
@@ -220,7 +225,7 @@ export const GeminiAgentSDKAdapter = (): AgentSDKAdapter => {
                             ...session.turns.filter((turn) => turn.id !== session.currentTurn.id),
                             nextTurn,
                           ],
-                          error: 'Gemini CLI returned error status',
+                          error: errorMessage,
                         }
                       : {
                           ...session,
@@ -245,17 +250,26 @@ export const GeminiAgentSDKAdapter = (): AgentSDKAdapter => {
         });
 
         child.stderr.on('data', (data: Buffer) => {
-          logger.error('[GeminiCLI] stderr:', data.toString('utf-8'));
+          const stderrChunk = data.toString('utf-8');
+          stderrBuffer += stderrChunk;
+          logger.error('[GeminiCLI] stderr:', stderrChunk);
         });
 
         child.on('error', (error) => {
           logger.error('[GeminiCLI] Process error', error);
-          currentProcess.stoppedPromise.reject(error);
+          const errorWithStderr = stderrBuffer.trim()
+            ? new Error(`${error.message}\n\nStderr:\n${stderrBuffer.trim()}`)
+            : error;
+          currentProcess.stoppedPromise.reject(errorWithStderr);
         });
 
         child.on('close', (code) => {
           if (code !== 0 && !abortController.signal.aborted) {
             logger.error(`[GeminiCLI] Process exited with code ${code}`);
+            const errorMessage = stderrBuffer.trim()
+              ? `Gemini CLI process exited with code ${code}\n\nStderr:\n${stderrBuffer.trim()}`
+              : `Gemini CLI process exited with code ${code}`;
+            currentProcess.stoppedPromise.reject(new Error(errorMessage));
           }
         });
 

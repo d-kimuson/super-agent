@@ -5,16 +5,21 @@ const main = async () => {
   const bridge = AgentBridge();
 
   const startResult = await bridge.startSession({
-    sdkType: 'copilot',
-    model: 'gpt-5-mini',
+    sdkType: 'gemini',
+    model: 'gemini-2.5-flash-lite',
     prompt: 'hi, how are you?',
     cwd: process.cwd(),
   });
 
-  const _continueResult = await bridge.continueSessionRaw({
+  logger.info('started', startResult.session.sdkSessionId);
+  logger.info('result(started)', await startResult.stopped);
+
+  const continueResult = await bridge.continueSessionRaw({
     sdkSessionId: startResult.session.sdkSessionId,
     prompt: 'what is the weather in tokyo?',
   });
+
+  logger.info('result(continued)', await continueResult.stopped);
 };
 
 main()
