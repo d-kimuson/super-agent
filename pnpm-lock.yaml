@@ -14,6 +14,9 @@ importers:
       '@github/copilot-sdk':
         specifier: 0.1.12
         version: 0.1.12
+      '@hono/node-server':
+        specifier: 1.19.9
+        version: 1.19.9(hono@4.11.4)
       '@modelcontextprotocol/sdk':
         specifier: 1.25.2
         version: 1.25.2(hono@4.11.4)(zod@4.3.5)
@@ -29,6 +32,9 @@ importers:
       gray-matter:
         specifier: 4.0.3
         version: 4.0.3
+      hono:
+        specifier: 4.11.4
+        version: 4.11.4
       zod:
         specifier: 4.3.5
         version: 4.3.5
