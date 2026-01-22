@@ -1,10 +1,10 @@
 import { logger } from '../lib/logger';
-import { AgentBridge } from '../sdk';
+import { AgentSdk } from '../sdk';
 
 const main = async () => {
-  const bridge = AgentBridge();
+  const sdk = AgentSdk();
 
-  const startResult = await bridge.startSession({
+  const startResult = await sdk.startSession({
     sdkType: 'gemini',
     model: 'gemini-2.5-flash-lite',
     prompt: 'hi, how are you?',
@@ -14,7 +14,7 @@ const main = async () => {
   logger.info('started', startResult.session.sdkSessionId);
   logger.info('result(started)', await startResult.stopped);
 
-  const continueResult = await bridge.continueSessionRaw({
+  const continueResult = await sdk.continueSessionRaw({
     sdkSessionId: startResult.session.sdkSessionId,
     prompt: 'what is the weather in tokyo?',
   });

@@ -1,10 +1,10 @@
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { AgentSdk } from '../../../agent-sdk/AgentSdk';
+import { type AgentModel, type FailedSession, type PausedSession } from '../../../agent-sdk/types';
 import { composePrompt } from '../../../config/composePrompt';
 import { expandSkills } from '../../../config/expandSkills';
-import { AgentBridge } from '../../../core/AgentBridge';
-import { type AgentModel, type FailedSession, type PausedSession } from '../../../core/types';
 import { type HonoContext } from '../../hono/app';
 
 type TaskResult =
@@ -101,17 +101,17 @@ export const tasksRoute = () => {
           skillsPrompt ? `${matchAgent.prompt}\n\n${skillsPrompt}` : matchAgent.prompt,
           input.prompt,
         );
-        const bridge = AgentBridge();
+        const sdk = AgentSdk();
 
         const result =
           input.resume === undefined
-            ? await bridge.startSession({
+            ? await sdk.startSession({
                 prompt: composedPrompt,
                 cwd: process.cwd(),
                 sdkType: selectedModel.sdkType,
                 ...(selectedModel.model !== undefined && { model: selectedModel.model }),
               })
-            : await bridge.resumeSession({
+            : await sdk.resumeSession({
                 ...selectedModel,
                 prompt: composedPrompt,
                 cwd: process.cwd(),

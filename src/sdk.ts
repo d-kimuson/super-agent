@@ -1,2 +1,2 @@
-export * from './core/types';
-export { AgentBridge } from './core/AgentBridge';
+export * from './agent-sdk/types';
+export { AgentSdk } from './agent-sdk/AgentSdk';

@@ -1,7 +1,7 @@
-import { type claudeModels } from './agent-sdks/claude/constants';
-import { type codexModels } from './agent-sdks/codex/constants';
-import { type copilotModels } from './agent-sdks/copilot/constants';
-import { type geminiModels } from './agent-sdks/gemini-cli/constants';
+import { type claudeModels } from './adapters/claude/constants';
+import { type codexModels } from './adapters/codex/constants';
+import { type copilotModels } from './adapters/copilot/constants';
+import { type geminiModels } from './adapters/gemini-cli/constants';
 import { type sdkTypes } from './constants';
 
 export type SdkType = (typeof sdkTypes)[number];

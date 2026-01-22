@@ -1,7 +1,7 @@
-import { ClaudeAgentSDKAdapter } from './agent-sdks/claude/ClaudeAgentSDKAdapter';
-import { CodexAgentSDKAdapter } from './agent-sdks/codex/CodexAgentSDKAdapterService';
-import { CopilotAgentSDKAdapter } from './agent-sdks/copilot/CopilotAgentSDKAdapterService';
-import { GeminiAgentSDKAdapter } from './agent-sdks/gemini-cli/GeminiAgentSDKAdapterService';
+import { ClaudeAgentSDKAdapter } from './adapters/claude/ClaudeAgentSDKAdapter';
+import { CodexAgentSDKAdapter } from './adapters/codex/CodexAgentSDKAdapterService';
+import { CopilotAgentSDKAdapter } from './adapters/copilot/CopilotAgentSDKAdapterService';
+import { GeminiAgentSDKAdapter } from './adapters/gemini-cli/GeminiAgentSDKAdapterService';
 import {
   type RunningSession,
   type PendingSession,
@@ -15,7 +15,7 @@ import {
   type ResumeSessionInput,
 } from './types';
 
-export const AgentBridge = () => {
+export const AgentSdk = () => {
   const claudeAgentSDKAdapter = ClaudeAgentSDKAdapter();
   const codexAgentSDKAdapter = CodexAgentSDKAdapter();
   const copilotAgentSDKAdapter = CopilotAgentSDKAdapter();
