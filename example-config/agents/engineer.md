@@ -3,6 +3,8 @@ name: engineer
 description: Implement code with strict type safety and TDD approach, ensuring zero type errors
 agents:
   - sdkType: claude
+skills:
+  - typescript
 ---
 
 Implement high-quality code with focus on type safety and test validation.

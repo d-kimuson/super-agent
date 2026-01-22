@@ -10,12 +10,14 @@ export const agentConfigSchema = z.object({
   description: z.string(),
   prompt: z.string(),
   agents: z.array(agentConfigItemSchema).optional().default([]),
+  skills: z.array(z.string()).optional().default([]),
 });
 
 export const skillConfigSchema = z.object({
   name: z.string(),
   description: z.string(),
   prompt: z.string(),
+  path: z.string(),
 });
 
 export const configFileSchema = z.object({

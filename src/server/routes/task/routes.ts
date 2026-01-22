@@ -2,6 +2,7 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { composePrompt } from '../../../config/composePrompt';
+import { expandSkills } from '../../../config/expandSkills';
 import { AgentBridge } from '../../../core/AgentBridge';
 import { type AgentModel, type FailedSession, type PausedSession } from '../../../core/types';
 import { type HonoContext } from '../../hono/app';
@@ -92,7 +93,14 @@ export const tasksRoute = () => {
           return c.json({ error: `Agent model not found: ${input.agentType}` }, 404);
         }
 
-        const composedPrompt = composePrompt(matchAgent.prompt, input.prompt);
+        // Expand skills if specified
+        const skillsPrompt =
+          matchAgent.skills.length > 0 ? expandSkills(config.skills, matchAgent.skills) : '';
+
+        const composedPrompt = composePrompt(
+          skillsPrompt ? `${matchAgent.prompt}\n\n${skillsPrompt}` : matchAgent.prompt,
+          input.prompt,
+        );
         const bridge = AgentBridge();
 
         const result =

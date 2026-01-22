@@ -34,6 +34,7 @@ const loadMarkdownWithSchema = async <T>(
     return schema.parse({
       ...data,
       prompt: prompt.trim() || undefined,
+      path: filePath,
     });
   } catch (error) {
     process.stderr.write(
