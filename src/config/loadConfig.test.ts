@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
-import { loadConfig } from './config';
+import { loadConfig } from './loadConfig';
 
 describe('loadConfig', () => {
   let stderrWriteSpy: MockInstance;

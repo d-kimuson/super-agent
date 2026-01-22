@@ -4,7 +4,7 @@
   "description": "FIXME",
   "license": "MIT",
   "bin": {
-    "agent-bridge": "./dist/cli.mjs"
+    "agent-bridge": "./dist/cli/index.mjs"
   },
   "files": [
     "dist"
@@ -12,8 +12,8 @@
   "type": "module",
   "exports": {
     "./cli": {
-      "require": "./dist/cli.cjs",
-      "import": "./dist/cli.mjs"
+      "require": "./dist/cli/index.cjs",
+      "import": "./dist/cli/index.mjs"
     },
     "./sdk": {
       "require": "./dist/sdk.cjs",
@@ -22,27 +22,31 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "prepare": "lefthook install",
+    "cli": "pnpm tsx ./src/cli/index.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "lint": "pnpm /^lint:.*/",
+    "lint": "run-s 'lint:*'",
     "lint:oxlint": "oxlint --type-aware --type-check --ignore-path .gitignore --report-unused-disable-directives --tsconfig ./tsconfig.json",
     "lint:oxfmt": "pnpm fix:oxfmt --check",
-    "fix": "pnpm /^fix:.*/",
+    "fix": "run-s 'fix:*'",
     "fix:oxlint": "pnpm lint:oxlint --fix --fix-suggestions --fix-dangerously",
-    "fix:oxfmt": "oxfmt --ignore-path .gitignore --no-error-on-unmatched-pattern"
+    "fix:oxfmt": "oxfmt --ignore-path .gitignore --no-error-on-unmatched-pattern",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.7",
     "@github/copilot-sdk": "0.1.12",
     "@hono/node-server": "1.19.9",
+    "@hono/zod-validator": "0.7.6",
     "@modelcontextprotocol/sdk": "1.25.2",
     "@openai/codex-sdk": "0.84.0",
     "ajv": "8.17.1",
     "commander": "14.0.2",
+    "es-toolkit": "1.44.0",
+    "get-port": "7.1.0",
     "gray-matter": "4.0.3",
     "hono": "4.11.4",
     "zod": "4.3.5",
@@ -54,6 +58,7 @@
     "@types/node": "25.0.8",
     "@vitest/ui": "4.0.17",
     "lefthook": "2.0.15",
+    "npm-run-all2": "8.0.4",
     "oxfmt": "0.24.0",
     "oxlint": "1.39.0",
     "oxlint-tsgolint": "0.11.0",

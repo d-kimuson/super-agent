@@ -1,115 +1,22 @@
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import packageJson from '../../package.json' with { type: 'json' };
-import { AgentBridge } from '../core/AgentBridge';
-import { type AgentModel, type FailedSession, type PausedSession } from '../core/types';
-import { composePrompt } from './composePrompt';
-import { type Config } from './types';
+import { honoClient } from '../client';
+import { type Config } from '../config/types';
+import { ensureServer } from '../server/management/ensureServer';
+import { getState } from '../state';
 
-type TaskResult =
-  | {
-      success: true;
-      response: string;
-    }
-  | {
-      success: false;
-      response: string;
-    };
-
-const registerSkillResources = (server: McpServer, config: Config) => {
-  if (config.skills.length === 0) {
-    return;
+const getClient = async () => {
+  await ensureServer();
+  const state = getState();
+  if (!state.server || state.server.status !== 'running') {
+    throw new Error('Server is not running');
   }
-
-  const skillMap = new Map(config.skills.map((skill) => [skill.name, skill]));
-
-  server.registerResource(
-    'skill',
-    new ResourceTemplate('skill://{skillName}', { list: undefined }),
-    {
-      description:
-        'Get skill prompt by name. Available skills: ' +
-        config.skills.map((s) => s.name).join(', '),
-    },
-    (uri, { skillName }) => {
-      const normalizedSkillName = Array.isArray(skillName) ? skillName[0] : skillName;
-      if (normalizedSkillName === undefined) {
-        throw new Error('Skill name is required');
-      }
-      const skill = skillMap.get(normalizedSkillName);
-      if (skill === undefined) {
-        throw new Error(`Skill not found: ${normalizedSkillName}`);
-      }
-      return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: 'text/plain',
-            text: skill.prompt,
-          },
-        ],
-      };
-    },
-  );
-};
-
-const registerSkillTool = (server: McpServer, config: Config) => {
-  if (config.skills.length === 0) {
-    return;
-  }
-
-  const skillNames = config.skills.map((skill) => skill.name);
-  const skillDescriptions = config.skills
-    .map((skill) => `- ${skill.name}: ${skill.description}`)
-    .join('\n');
-
-  const getSkillArgsSchema = z.object({
-    skillName: z.enum(skillNames).describe('The name of the skill to retrieve'),
-  });
-
-  server.registerTool(
-    'get-skill',
-    {
-      description: `Get the prompt content of a skill by name.\n\nAvailable skills:\n${skillDescriptions}\n\nUse this to retrieve skill prompts for injection into agent tasks.`,
-      inputSchema: getSkillArgsSchema,
-    },
-    (input) => {
-      const skill = config.skills.find(({ name }) => name === input.skillName);
-
-      if (skill === undefined) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Skill not found: ${input.skillName}`,
-            },
-          ],
-        };
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: skill.prompt,
-          },
-        ],
-      };
-    },
-  );
+  return honoClient(state.server.port);
 };
 
 export const createServer = (config: Config) => {
-  const bridge = AgentBridge();
-  const backgroundTaskMap = new Map<
-    string,
-    {
-      promise: Promise<PausedSession | FailedSession>;
-    }
-  >();
-
   const server = new McpServer({
     name: packageJson.name,
     version: packageJson.version,
@@ -143,37 +50,6 @@ export const createServer = (config: Config) => {
       .describe('Whether to run the task in the background'),
   });
 
-  const errorToString = (error: unknown) => {
-    if (error instanceof Error) {
-      return error.message;
-    }
-
-    return String(error);
-  };
-
-  const stoppedSessionToResponse = (session: PausedSession | FailedSession): TaskResult => {
-    const resumeMessage = `To continue the conversation, use the 'agent-task' tool again with the resume=${session.sdkSessionId}.`;
-
-    if (session.status === 'paused') {
-      if (session.currentTurn.status === 'completed') {
-        return {
-          success: true,
-          response: session.currentTurn.output + '\n\n---\n\n' + resumeMessage,
-        } as const;
-      } else {
-        return {
-          success: false,
-          response: errorToString(session.currentTurn.error) + '\n\n---\n\n' + resumeMessage,
-        } as const;
-      }
-    }
-
-    return {
-      success: false,
-      response: errorToString(session.error) + '\n\n---\n\n' + resumeMessage,
-    } as const;
-  };
-
   server.registerTool(
     'agent-task',
     {
@@ -181,91 +57,77 @@ export const createServer = (config: Config) => {
       inputSchema: agentTaskArgsSchema,
     },
     async (input) => {
-      const matchAgent = config.agents.find(({ name }) => name === input.agentType);
-
-      if (matchAgent === undefined) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Agent type not found: ${input.agentType}`,
-            },
-          ],
-        };
-      }
-
-      const selectedModel = matchAgent.agents.at(0) as AgentModel | undefined;
-
-      if (selectedModel === undefined) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Agent model not found: ${input.agentType}`,
-            },
-          ],
-        };
-      }
-
-      const composedPrompt = composePrompt(matchAgent.prompt, input.prompt);
-
-      const result =
-        input.resume === undefined
-          ? await bridge.startSession({
-              prompt: composedPrompt,
-              cwd: process.cwd(),
-              model: selectedModel.model,
-              sdkType: selectedModel.sdkType,
-            })
-          : await bridge.resumeSession({
-              ...selectedModel,
-              prompt: composedPrompt,
-              cwd: process.cwd(),
-              sdkSessionId: input.resume,
-            });
-
-      if (result.code !== 'success') {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Failed to start task: ${result.code}`,
-            },
-          ],
-        };
-      }
-
-      if (input.runInBackground) {
-        backgroundTaskMap.set(result.session.sdkSessionId, {
-          promise: result.stopped,
+      try {
+        const client = await getClient();
+        const response = await client.task.execute.$post({
+          json: {
+            agentType: input.agentType,
+            prompt: input.prompt,
+            resume: input.resume,
+            runInBackground: input.runInBackground,
+          },
         });
 
+        const data = await response.json();
+
+        // Background task の場合
+        if ('sessionId' in data && 'message' in data) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Task started in background. Session ID: ${data.sessionId}`,
+              },
+            ],
+          };
+        }
+
+        // 通常のレスポンス
+        if ('success' in data) {
+          return {
+            isError: !data.success,
+            content: [
+              {
+                type: 'text',
+                text: data.response,
+              },
+            ],
+          };
+        }
+
+        // エラーレスポンス
+        if ('error' in data) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: data.error,
+              },
+            ],
+          };
+        }
+
         return {
+          isError: true,
           content: [
             {
               type: 'text',
-              text: `Task started in background. Session ID: ${result.session.sdkSessionId}`,
+              text: 'Unknown response format',
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: error instanceof Error ? error.message : String(error),
             },
           ],
         };
       }
-
-      // await completion
-      const stopped = await result.stopped;
-      const taskResult = stoppedSessionToResponse(stopped);
-
-      return {
-        isError: !taskResult.success,
-        content: [
-          {
-            type: 'text',
-            text: taskResult.response,
-          },
-        ],
-      } as const;
     },
   );
 
@@ -280,47 +142,69 @@ export const createServer = (config: Config) => {
       inputSchema: agentTaskOutputArgsSchema,
     },
     async (input) => {
-      const task = backgroundTaskMap.get(input.sessionId);
+      try {
+        const client = await getClient();
+        const response = await client.task.output.$post({
+          json: {
+            sessionId: input.sessionId,
+          },
+        });
 
-      if (task === undefined) {
+        const data = await response.json();
+
+        if ('success' in data) {
+          return {
+            isError: !data.success,
+            content: [
+              {
+                type: 'text',
+                text: data.response,
+              },
+            ],
+          };
+        }
+
+        if ('error' in data) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: data.error,
+              },
+            ],
+          };
+        }
+
         return {
           isError: true,
           content: [
             {
               type: 'text',
-              text: `Background task not found: ${input.sessionId}`,
+              text: 'Unknown response format',
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: error instanceof Error ? error.message : String(error),
             },
           ],
         };
       }
-
-      // Wait for completion
-      const stopped = await task.promise;
-      const taskResult = stoppedSessionToResponse(stopped);
-
-      // Remove from map after completion
-      backgroundTaskMap.delete(input.sessionId);
-
-      return {
-        isError: !taskResult.success,
-        content: [
-          {
-            type: 'text',
-            text: taskResult.response,
-          },
-        ],
-      } as const;
     },
   );
-
-  // Register skill resources and tools
-  registerSkillResources(server, config);
-  registerSkillTool(server, config);
 
   return server;
 };
 
 export const startServer = async (config: Config) => {
+  await ensureServer();
+
   const server = createServer(config);
   const transport = new StdioServerTransport();
   await server.connect(transport);
