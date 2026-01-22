@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import packageJson from '../../package.json' with { type: 'json' };
@@ -16,6 +16,90 @@ type TaskResult =
       success: false;
       response: string;
     };
+
+const registerSkillResources = (server: McpServer, config: Config) => {
+  if (config.skills.length === 0) {
+    return;
+  }
+
+  const skillMap = new Map(config.skills.map((skill) => [skill.name, skill]));
+
+  server.registerResource(
+    'skill',
+    new ResourceTemplate('skill://{skillName}', { list: undefined }),
+    {
+      description:
+        'Get skill prompt by name. Available skills: ' +
+        config.skills.map((s) => s.name).join(', '),
+    },
+    (uri, { skillName }) => {
+      const normalizedSkillName = Array.isArray(skillName) ? skillName[0] : skillName;
+      if (normalizedSkillName === undefined) {
+        throw new Error('Skill name is required');
+      }
+      const skill = skillMap.get(normalizedSkillName);
+      if (skill === undefined) {
+        throw new Error(`Skill not found: ${normalizedSkillName}`);
+      }
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: 'text/plain',
+            text: skill.prompt,
+          },
+        ],
+      };
+    },
+  );
+};
+
+const registerSkillTool = (server: McpServer, config: Config) => {
+  if (config.skills.length === 0) {
+    return;
+  }
+
+  const skillNames = config.skills.map((skill) => skill.name);
+  const skillDescriptions = config.skills
+    .map((skill) => `- ${skill.name}: ${skill.description}`)
+    .join('\n');
+
+  const getSkillArgsSchema = z.object({
+    skillName: z.enum(skillNames).describe('The name of the skill to retrieve'),
+  });
+
+  server.registerTool(
+    'get-skill',
+    {
+      description: `Get the prompt content of a skill by name.\n\nAvailable skills:\n${skillDescriptions}\n\nUse this to retrieve skill prompts for injection into agent tasks.`,
+      inputSchema: getSkillArgsSchema,
+    },
+    (input) => {
+      const skill = config.skills.find(({ name }) => name === input.skillName);
+
+      if (skill === undefined) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Skill not found: ${input.skillName}`,
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: skill.prompt,
+          },
+        ],
+      };
+    },
+  );
+};
 
 export const createServer = (config: Config) => {
   const bridge = AgentBridge();
@@ -228,6 +312,10 @@ export const createServer = (config: Config) => {
       } as const;
     },
   );
+
+  // Register skill resources and tools
+  registerSkillResources(server, config);
+  registerSkillTool(server, config);
 
   return server;
 };

@@ -1,3 +1,4 @@
 {
-  "agentDirs": ["./example-config/agents"]
+  "agentDirs": ["./example-config/agents"],
+  "skillDirs": ["./example-config/skills"]
 }

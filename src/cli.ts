@@ -29,13 +29,15 @@ mcpCommand
 
       const home = homedir();
       const agentDirs = [join(home, '.agent-bridge', 'agents')];
+      const skillDirs = [join(home, '.agent-bridge', 'skills')];
 
       const config = await loadConfig({
         configPath: options.config,
         agentDirs,
+        skillDirs,
       });
 
-      logger.info(`Loaded ${config.agents.length} agent(s)`);
+      logger.info(`Loaded ${config.agents.length} agent(s), ${config.skills.length} skill(s)`);
 
       if (config.agents.length === 0) {
         logger.warn('No agents found. Please check your agent directories.');

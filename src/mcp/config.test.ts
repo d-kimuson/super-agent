@@ -17,7 +17,7 @@ describe('loadConfig', () => {
   describe('markdown directory loading', () => {
     it('should load all agents from example-config directory', async () => {
       const agentDir = join(process.cwd(), 'example-config', 'agents');
-      const config = await loadConfig({ agentDirs: [agentDir] });
+      const config = await loadConfig({ agentDirs: [agentDir], skillDirs: [] });
 
       expect(config.agents).toHaveLength(7);
 
@@ -35,7 +35,7 @@ describe('loadConfig', () => {
 
     it('should correctly load architect agent', async () => {
       const agentDir = join(process.cwd(), 'example-config', 'agents');
-      const config = await loadConfig({ agentDirs: [agentDir] });
+      const config = await loadConfig({ agentDirs: [agentDir], skillDirs: [] });
 
       const architect = config.agents.find((a) => a.name === 'architect');
       expect(architect).toBeDefined();
@@ -49,7 +49,7 @@ describe('loadConfig', () => {
 
     it('should correctly load engineer agent', async () => {
       const agentDir = join(process.cwd(), 'example-config', 'agents');
-      const config = await loadConfig({ agentDirs: [agentDir] });
+      const config = await loadConfig({ agentDirs: [agentDir], skillDirs: [] });
 
       const engineer = config.agents.find((a) => a.name === 'engineer');
       expect(engineer).toBeDefined();
@@ -60,11 +60,11 @@ describe('loadConfig', () => {
 
     it('should correctly load researcher agent with model', async () => {
       const agentDir = join(process.cwd(), 'example-config', 'agents');
-      const config = await loadConfig({ agentDirs: [agentDir] });
+      const config = await loadConfig({ agentDirs: [agentDir], skillDirs: [] });
 
       const researcher = config.agents.find((a) => a.name === 'researcher');
       expect(researcher).toBeDefined();
-      expect(researcher?.agents).toEqual([{ sdkType: 'gemini', model: 'gemini-2.0-flash-exp' }]);
+      expect(researcher?.agents).toEqual([{ sdkType: 'gemini', model: 'gemini-2.5-flash-lite' }]);
     });
 
     it('should load from multiple directories', async () => {
@@ -95,7 +95,7 @@ agents:
 Prompt 2`,
         );
 
-        const config = await loadConfig({ agentDirs: [tempDir1, tempDir2] });
+        const config = await loadConfig({ agentDirs: [tempDir1, tempDir2], skillDirs: [] });
         expect(config.agents).toHaveLength(2);
         expect(config.agents.map((a) => a.name).sort()).toEqual(['agent1', 'agent2']);
       } finally {
@@ -122,7 +122,7 @@ Prompt`,
         writeFileSync(join(tempDir, 'readme.txt'), 'Not a markdown file');
         writeFileSync(join(tempDir, 'config.json'), '{}');
 
-        const config = await loadConfig({ agentDirs: [tempDir] });
+        const config = await loadConfig({ agentDirs: [tempDir], skillDirs: [] });
         expect(config.agents).toHaveLength(1);
         expect(config.agents[0]?.name).toBe('valid');
       } finally {
@@ -145,10 +145,10 @@ agents:
 ---`,
         );
 
-        const config = await loadConfig({ agentDirs: [tempDir] });
+        const config = await loadConfig({ agentDirs: [tempDir], skillDirs: [] });
         expect(config.agents).toHaveLength(0);
         expect(stderrWriteSpy).toHaveBeenCalledWith(
-          expect.stringContaining('[Warning] Skipping invalid agent file'),
+          expect.stringContaining('[Warning] Skipping invalid Agent file'),
         );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
@@ -156,7 +156,7 @@ agents:
     });
 
     it('should return empty agents when directory does not exist', async () => {
-      const config = await loadConfig({ agentDirs: ['/non/existent/path'] });
+      const config = await loadConfig({ agentDirs: ['/non/existent/path'], skillDirs: [] });
       expect(config.agents).toHaveLength(0);
       expect(stderrWriteSpy).toHaveBeenCalledWith(
         expect.stringContaining('[Warning] Agent directory not found'),
@@ -164,7 +164,7 @@ agents:
     });
 
     it('should return empty agents when no directories provided', async () => {
-      const config = await loadConfig({ agentDirs: [] });
+      const config = await loadConfig({ agentDirs: [], skillDirs: [] });
       expect(config.agents).toHaveLength(0);
     });
   });
@@ -172,7 +172,7 @@ agents:
   describe('config file loading', () => {
     it('should load without config file', async () => {
       const agentDir = join(process.cwd(), 'example-config', 'agents');
-      const config = await loadConfig({ agentDirs: [agentDir] });
+      const config = await loadConfig({ agentDirs: [agentDir], skillDirs: [] });
       expect(config.agents).toHaveLength(7);
     });
 
@@ -195,7 +195,7 @@ agents:
 Prompt`,
         );
 
-        const config = await loadConfig({ configPath, agentDirs: [tempDir] });
+        const config = await loadConfig({ configPath, agentDirs: [tempDir], skillDirs: [] });
         expect(config.agents).toHaveLength(1);
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
@@ -207,6 +207,7 @@ Prompt`,
       const config = await loadConfig({
         configPath: '/non/existent/config.json',
         agentDirs: [agentDir],
+        skillDirs: [],
       });
       expect(config.agents).toHaveLength(7);
     });
@@ -230,7 +231,7 @@ agents:
 Prompt`,
         );
 
-        const config = await loadConfig({ configPath, agentDirs: [tempDir] });
+        const config = await loadConfig({ configPath, agentDirs: [tempDir], skillDirs: [] });
         expect(config.agents).toHaveLength(1);
         expect(stderrWriteSpy).toHaveBeenCalledWith(
           expect.stringContaining('[Warning] Invalid config file'),
@@ -238,6 +239,101 @@ Prompt`,
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe('skill directory loading', () => {
+    it('should load skill from example-config/skills directory', async () => {
+      const skillDir = join(process.cwd(), 'example-config', 'skills');
+      const config = await loadConfig({ agentDirs: [], skillDirs: [skillDir] });
+
+      expect(config.skills).toHaveLength(1);
+
+      const typescript = config.skills.find((s) => s.name === 'typescript');
+      expect(typescript).toBeDefined();
+      expect(typescript?.description).toBe(
+        'TypeScript best practices and patterns for writing type-safe code',
+      );
+      expect(typescript?.prompt).toContain('Type Safety');
+      expect(typescript?.prompt).toContain('discriminated unions');
+    });
+
+    it('should load from multiple skill directories', async () => {
+      const tempDir1 = join(process.cwd(), '__temp_skill_test_1__');
+      const tempDir2 = join(process.cwd(), '__temp_skill_test_2__');
+      mkdirSync(tempDir1, { recursive: true });
+      mkdirSync(tempDir2, { recursive: true });
+
+      try {
+        writeFileSync(
+          join(tempDir1, 'skill1.md'),
+          `---
+name: skill1
+description: Skill 1
+---
+Prompt 1`,
+        );
+        writeFileSync(
+          join(tempDir2, 'skill2.md'),
+          `---
+name: skill2
+description: Skill 2
+---
+Prompt 2`,
+        );
+
+        const config = await loadConfig({ agentDirs: [], skillDirs: [tempDir1, tempDir2] });
+        expect(config.skills).toHaveLength(2);
+        expect(config.skills.map((s) => s.name).sort()).toEqual(['skill1', 'skill2']);
+      } finally {
+        rmSync(tempDir1, { recursive: true, force: true });
+        rmSync(tempDir2, { recursive: true, force: true });
+      }
+    });
+
+    it('should skip invalid skill files with warning', async () => {
+      const tempDir = join(process.cwd(), '__temp_skill_test__');
+      mkdirSync(tempDir, { recursive: true });
+
+      try {
+        writeFileSync(
+          join(tempDir, 'valid.md'),
+          `---
+name: valid
+description: Valid skill
+---
+Prompt`,
+        );
+        writeFileSync(
+          join(tempDir, 'invalid.md'),
+          `---
+description: Missing name field
+---
+Prompt`,
+        );
+
+        const config = await loadConfig({ agentDirs: [], skillDirs: [tempDir] });
+        expect(config.skills).toHaveLength(1);
+        expect(config.skills[0]?.name).toBe('valid');
+        expect(stderrWriteSpy).toHaveBeenCalledWith(
+          expect.stringContaining('[Warning] Skipping invalid Skill file'),
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should return empty skills when directory does not exist', async () => {
+      const config = await loadConfig({ agentDirs: [], skillDirs: ['/non/existent/skill/path'] });
+      expect(config.skills).toHaveLength(0);
+      expect(stderrWriteSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Warning] Skill directory not found'),
+      );
+    });
+
+    it('should return empty skills when no skill directories provided', async () => {
+      const config = await loadConfig({ agentDirs: [], skillDirs: [] });
+      expect(config.skills).toHaveLength(0);
     });
   });
 
@@ -267,11 +363,11 @@ agents:
 Prompt`,
         );
 
-        const config = await loadConfig({ agentDirs: [tempDir] });
+        const config = await loadConfig({ agentDirs: [tempDir], skillDirs: [] });
         expect(config.agents).toHaveLength(1);
         expect(config.agents[0]?.name).toBe('valid');
         expect(stderrWriteSpy).toHaveBeenCalledWith(
-          expect.stringContaining('[Warning] Skipping invalid agent file'),
+          expect.stringContaining('[Warning] Skipping invalid Agent file'),
         );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
@@ -304,7 +400,7 @@ agents:
 Prompt`,
         );
 
-        const config = await loadConfig({ agentDirs: [tempDir] });
+        const config = await loadConfig({ agentDirs: [tempDir], skillDirs: [] });
         expect(config.agents).toHaveLength(1);
         expect(config.agents[0]?.name).toBe('valid');
         expect(stderrWriteSpy).toHaveBeenCalled();
