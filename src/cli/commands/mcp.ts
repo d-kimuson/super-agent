@@ -1,8 +1,17 @@
-import { Command } from 'commander';
-import { loadConfig } from '../../config/loadConfig';
+import { Command, type Command as CommandType } from 'commander';
+import { env } from '../../config/env';
+import { loadContext } from '../../config/loadContext';
+import { type CliArgs } from '../../config/schema';
 import { logger } from '../../lib/logger';
-import { paths } from '../../lib/paths';
 import { startServer as startMcpServer } from '../../mcp/server';
+
+type GlobalOptions = {
+  ssaDir?: string;
+  availableProviders?: string;
+  disabledModels?: string;
+  agentsDir?: string;
+  skillsDir?: string;
+};
 
 export const createMcpCommand = () => {
   const mcpCommand = new Command('mcp');
@@ -11,25 +20,47 @@ export const createMcpCommand = () => {
   mcpCommand
     .command('serve')
     .description('Start MCP server')
-    .action(async () => {
+    .action(async function (this: CommandType) {
       try {
         logger.setLoggerType('stderr');
         logger.info('Loading configuration...');
 
-        const config = await loadConfig({
-          configPath: paths.configFile,
-          agentDirs: [paths.agentsDir],
-          skillDirs: [paths.skillsDir],
+        // 親コマンドからグローバルオプションを取得
+        const rootCommand = this.parent?.parent;
+        const opts = rootCommand?.opts<GlobalOptions>();
+
+        // CLI args を構築（型チェックはランタイムで行う）
+        const cliArgs: Partial<CliArgs> = {
+          'ssa-dir': opts?.ssaDir,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+          'available-providers': opts?.availableProviders?.split(',') as
+            | ('claude' | 'codex' | 'copilot' | 'gemini')[]
+            | undefined,
+          'disabled-models': opts?.disabledModels?.split(','),
+          'agents-dir': opts?.agentsDir?.split(','),
+          'skills-dir': opts?.skillsDir?.split(','),
+        };
+
+        // CLI args と env vars から context を読み込み
+        const context = await loadContext({
+          cliArgs,
+          envVars: {
+            SSA_DIR: env.getEnv('SSA_DIR'),
+            SSA_AVAILABLE_PROVIDERS: env.getEnv('SSA_AVAILABLE_PROVIDERS'),
+            SSA_DISABLED_MODELS: env.getEnv('SSA_DISABLED_MODELS'),
+            SSA_AGENT_DIRS: env.getEnv('SSA_AGENT_DIRS'),
+            SSA_SKILL_DIRS: env.getEnv('SSA_SKILL_DIRS'),
+          },
         });
 
-        logger.info(`Loaded ${config.agents.length} agent(s), ${config.skills.length} skill(s)`);
+        logger.info(`Loaded ${context.agents.length} agent(s), ${context.skills.length} skill(s)`);
 
-        if (config.agents.length === 0) {
+        if (context.agents.length === 0) {
           logger.warn('No agents found. Please check your agent directories.');
         }
 
         logger.info('Starting MCP server...');
-        await startMcpServer(config);
+        await startMcpServer(context);
       } catch (error) {
         logger.error('Failed to start MCP server:', error);
         process.exit(1);

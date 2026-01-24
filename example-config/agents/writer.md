@@ -1,7 +1,7 @@
 ---
 name: writer
 description: Write clear, well-structured documents and content
-agents:
+models:
   - sdkType: gemini
     model: gemini-2.5-flash-lite
 ---

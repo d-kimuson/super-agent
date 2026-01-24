@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Design implementation approach for complex tasks, compare options, and define architecture
-agents:
+models:
   - sdkType: codex
 ---
 

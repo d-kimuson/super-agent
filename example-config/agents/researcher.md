@@ -1,7 +1,7 @@
 ---
 name: researcher
 description: Research information on the web and provide comprehensive insights
-agents:
+models:
   - sdkType: gemini
     model: gemini-2.5-flash-lite
 ---

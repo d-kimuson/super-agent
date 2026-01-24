@@ -4,7 +4,6 @@ import { Command } from 'commander';
 import packageJson from '../../package.json' with { type: 'json' };
 import { logger } from '../lib/logger';
 import { createMcpCommand } from './commands/mcp';
-import { createServerCommand } from './commands/server';
 
 export const createProgram = () => {
   const program = new Command();
@@ -13,11 +12,16 @@ export const createProgram = () => {
     // meta
     .name(packageJson.name)
     .version(packageJson.version)
-    .description(packageJson.description);
+    .description(packageJson.description)
+    // global options
+    .option('--ssa-dir <path>', 'Super Subagents directory')
+    .option('--available-providers <providers>', 'Available providers (comma-separated)')
+    .option('--disabled-models <models>', 'Disabled models (comma-separated)')
+    .option('--agents-dir <paths>', 'Agent directories (comma-separated)')
+    .option('--skills-dir <paths>', 'Skill directories (comma-separated)');
 
   // commands
   program.addCommand(createMcpCommand());
-  program.addCommand(createServerCommand());
 
   return program;
 };

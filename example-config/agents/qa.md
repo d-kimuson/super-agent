@@ -1,7 +1,7 @@
 ---
 name: qa
 description: Execute exploratory quality verification and testing
-agents:
+models:
   - sdkType: claude
 ---
 

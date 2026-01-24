@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Review code quality, verify acceptance criteria, and identify issues with priorities
-agents:
+models:
   - sdkType: codex
 ---
 

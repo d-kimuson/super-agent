@@ -1,6 +1,7 @@
-import { type AgentConfig, type ConfigFile, type SkillConfig } from './schema';
+import { type AgentConfig, type Config, type SkillConfig } from './schema';
 
-export type Config = ConfigFile & {
+export type Context = {
+  config: Config;
   agents: AgentConfig[];
   skills: SkillConfig[];
 };

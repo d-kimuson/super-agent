@@ -1,7 +1,7 @@
 ---
 name: translator
 description: Translate text between languages with natural phrasing and cultural awareness
-agents:
+models:
   - sdkType: gemini
     model: gemini-2.5-flash-lite
 ---
