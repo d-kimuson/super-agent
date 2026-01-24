@@ -1,6 +1,6 @@
-# @kimuson/agent-bridge
+# @kimuson/super-subagents
 
-`@kimuson/agent-bridge` is a small adapter layer that lets you access multiple Agent SDKs through a unified interface.
+`@kimuson/super-subagents` is a small adapter layer that lets you access multiple Agent SDKs through a unified interface.
 
 Target SDKs:
 
@@ -14,15 +14,15 @@ This repository aims to make it easy to switch providers without rewriting your 
 ## Install
 
 ```bash
-pnpm add @kimuson/agent-bridge
+pnpm add @kimuson/super-subagents
 ```
 
 ## Packages
 
-- `@kimuson/agent-bridge`
+- `@kimuson/super-subagents`
   CLI entrypoint (primarily for exposing MCP)
 
-- `@kimuson/agent-bridge/sdk`
+- `@kimuson/super-subagents/sdk`
   TypeScript SDK entrypoint (for importing from your app)
 
 ## License

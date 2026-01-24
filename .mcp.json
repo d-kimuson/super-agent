@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "agent-bridge": {
+    "super-subagents": {
       "command": "pnpm",
       "args": ["tsx", "./src/cli.ts", "mcp", "serve", "-c", "./example-config/config.json"]
     }

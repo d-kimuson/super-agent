@@ -130,7 +130,7 @@ export const createServerCommand = () => {
             logger.warn(
               `Server is marked as running (pid: ${state.server.pid}) but not responding at http://${host}:${port}`,
             );
-            logger.info('Try running "agent-bridge server restart" to fix this');
+            logger.info('Try running "super-subagents server restart" to fix this');
           }
         } else {
           logger.info(`Server is stopped (last known: http://${host}:${port})`);

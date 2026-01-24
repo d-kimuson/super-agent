@@ -1,4 +1,4 @@
-# CLAUDE.md (agent-bridge)
+# CLAUDE.md (super-subagents)
 
 ## Overview
 

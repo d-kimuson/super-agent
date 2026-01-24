@@ -2,9 +2,9 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
 const agentBridgeDir =
-  process.env['AGB_DIR'] !== undefined
-    ? resolve(process.env['AGB_DIR'])
-    : resolve(homedir(), '.agent-bridge');
+  process.env['SSA_DIR'] !== undefined
+    ? resolve(process.env['SSA_DIR'])
+    : resolve(homedir(), '.super-subagents');
 
 export const paths = {
   agentBridgeDir,

@@ -6,6 +6,6 @@ export const systemRoute = new Hono<HonoContext>()
   .get('/health', (c) =>
     c.json({
       status: 'healthy',
-      server: 'agent-bridge',
+      server: 'super-subagents',
     }),
   );

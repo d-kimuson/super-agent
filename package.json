@@ -1,10 +1,10 @@
 {
-  "name": "@kimuson/agent-bridge",
+  "name": "@kimuson/super-subagents",
   "version": "0.0.0",
   "description": "FIXME",
   "license": "MIT",
   "bin": {
-    "agent-bridge": "./dist/cli/index.mjs"
+    "super-subagents": "./dist/cli/index.mjs"
   },
   "files": [
     "dist"
