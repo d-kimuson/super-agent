@@ -75,21 +75,17 @@ export const createToolsCommand = () => {
         // 結果を出力
         if (result.success) {
           if (options.outputFormat === 'json') {
-            
           } else {
             logger.info('Task completed successfully');
             if ('message' in result && result.message) {
-              
             }
           }
           process.exit(0);
         } else {
           if (options.outputFormat === 'json') {
-            
           } else {
             logger.error('Task failed');
             if ('message' in result && result.message) {
-              
             }
           }
           process.exit(1);

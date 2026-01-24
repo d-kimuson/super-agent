@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { AgentSdk } from '../agent-sdk/AgentSdk';
-import { type PausedSession, type FailedSession, type AgentModel } from '../agent-sdk/types';
+import { type FailedSession, type PausedSession } from '../agent-sdk/types';
 import { type Context } from '../config/types';
 import { composePrompt } from './composePrompt';
+import { selectModel } from './selectModel';
 import { stoppedSessionToResult } from './stoppedSessionToResult';
 import { type ToolResult } from './types';
 
@@ -11,7 +12,7 @@ const agentTaskOutputSchema = z.object({
 });
 
 export const SuperSubagents = (context: Context) => {
-  const { agents, skills } = context;
+  const { agents, skills, config } = context;
 
   const backgroundTaskMap = new Map<
     string,
@@ -47,16 +48,18 @@ export const SuperSubagents = (context: Context) => {
       } as const;
     }
 
-    const selectedModel = matchAgent.models.at(0) as AgentModel | undefined;
-    // TODO: fallback to default model, filter by supported providers
+    // Select model with filtering and fallback
+    const modelResult = selectModel({ agentModels: matchAgent.models, config });
 
-    if (selectedModel === undefined) {
+    if (modelResult.code !== 'success') {
       return {
         success: false,
         code: 'agent-model-not-found',
-        message: `Agent model not found: ${input.agentType}`,
+        message: `No available model for agent "${input.agentType}". ${modelResult.message}`,
       } as const;
     }
+
+    const selectedModel = modelResult.model;
 
     // Expand skills if specified
     const composedPrompt = composePrompt({

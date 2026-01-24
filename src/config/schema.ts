@@ -24,10 +24,24 @@ export const skillConfigSchema = z.object({
   path: z.string(),
 });
 
+/**
+ * Default model format: "provider:model" (e.g., "claude:sonnet") or "provider" (e.g., "claude")
+ */
+const parseDefaultModel = (value: string): z.infer<typeof agentModelSchema> => {
+  const [sdkType, model] = value.split(':');
+  return agentModelSchema.parse({
+    sdkType,
+    model: model ?? undefined,
+  });
+};
+
+const defaultModelSchema = z.string().transform(parseDefaultModel);
+
 const configRestrictions = {
   ssaDir: z.string(),
   availableProviders: z.array(providersSchema),
   disabledModels: z.array(z.string()),
+  defaultModel: defaultModelSchema,
   agentDirs: z.array(z.string()),
   skillDirs: z.array(z.string()),
 } as const;
@@ -47,6 +61,10 @@ export const envVarsSchema = z.object({
     .string()
     .optional()
     .transform((value) => value?.split(',') ?? []),
+  SSA_DEFAULT_MODEL: z
+    .string()
+    .optional()
+    .transform((value) => (value !== undefined ? defaultModelSchema.parse(value) : undefined)),
   SSA_AGENT_DIRS: z
     .string()
     .optional()
@@ -61,6 +79,7 @@ export const cliArgsSchema = z.object({
   'ssa-dir': configRestrictions.ssaDir.optional(),
   'available-providers': configRestrictions.availableProviders.optional(),
   'disabled-models': configRestrictions.disabledModels.optional(),
+  'default-model': configRestrictions.defaultModel.optional(),
   'agents-dir': configRestrictions.agentDirs.optional(),
   'skills-dir': configRestrictions.skillDirs.optional(),
 });
@@ -71,6 +90,10 @@ export const configSchema = z.object({
     .optional()
     .default(['claude', 'codex', 'copilot', 'gemini']),
   disabledModels: configRestrictions.disabledModels.optional().default([]),
+  defaultModel: agentModelSchema.optional().default({
+    sdkType: 'claude',
+    model: 'default',
+  }),
   agentsDirs: configRestrictions.agentDirs.optional().default([]),
   skillsDirs: configRestrictions.skillDirs.optional().default([]),
 });

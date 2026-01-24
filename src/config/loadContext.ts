@@ -47,6 +47,7 @@ const mergeConfig = (
       (envVars.SSA_DISABLED_MODELS !== undefined && envVars.SSA_DISABLED_MODELS.length > 0
         ? envVars.SSA_DISABLED_MODELS
         : undefined),
+    defaultModel: cliArgs['default-model'] ?? envVars.SSA_DEFAULT_MODEL,
     agentsDirs:
       cliArgs['agents-dir'] ??
       (envVars.SSA_AGENT_DIRS !== undefined && envVars.SSA_AGENT_DIRS.length > 0

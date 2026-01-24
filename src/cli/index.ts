@@ -18,6 +18,7 @@ export const createProgram = () => {
     .option('--ssa-dir <path>', 'Super Subagents directory')
     .option('--available-providers <providers>', 'Available providers (comma-separated)')
     .option('--disabled-models <models>', 'Disabled models (comma-separated)')
+    .option('--default-model <model>', 'Default model (format: provider:model or provider)')
     .option('--agents-dir <paths>', 'Agent directories (comma-separated)')
     .option('--skills-dir <paths>', 'Skill directories (comma-separated)');
 
