@@ -100,7 +100,16 @@ export const loadContext = async (options: LoadContextOptions = {}): Promise<Con
 
   return {
     config,
-    agents,
+    agents: [
+      {
+        name: 'general',
+        models: [config.defaultModel],
+        prompt: '',
+        description: 'General-purpose agent without any specialized instructions',
+        skills: [],
+      },
+      ...agents,
+    ],
     skills,
   };
 };

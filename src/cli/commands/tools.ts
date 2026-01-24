@@ -1,7 +1,7 @@
 import { Command, type Command as CommandType } from 'commander';
 import { env } from '../../config/env';
 import { loadContext } from '../../config/loadContext';
-import { type CliArgs } from '../../config/schema';
+import { cliArgsSchema } from '../../config/schema';
 import { SuperSubagents } from '../../core/SuperSubagents';
 import { logger } from '../../lib/logger';
 
@@ -39,16 +39,13 @@ export const createToolsCommand = () => {
         const opts = rootCommand?.opts<GlobalOptions>();
 
         // CLI args を構築
-        const cliArgs: Partial<CliArgs> = {
+        const cliArgs = cliArgsSchema.parse({
           'ssa-dir': opts?.ssaDir,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-          'available-providers': opts?.availableProviders?.split(',') as
-            | ('claude' | 'codex' | 'copilot' | 'gemini')[]
-            | undefined,
-          'disabled-models': opts?.disabledModels?.split(','),
-          'agents-dir': opts?.agentsDir?.split(','),
-          'skills-dir': opts?.skillsDir?.split(','),
-        };
+          'available-providers': opts?.availableProviders,
+          'disabled-models': opts?.disabledModels,
+          'agents-dir': opts?.agentsDir,
+          'skills-dir': opts?.skillsDir,
+        });
 
         // context を読み込み
         const context = await loadContext({
@@ -75,18 +72,16 @@ export const createToolsCommand = () => {
         // 結果を出力
         if (result.success) {
           if (options.outputFormat === 'json') {
+            logger.info(JSON.stringify(result, null, 2));
           } else {
-            logger.info('Task completed successfully');
-            if ('message' in result && result.message) {
-            }
+            logger.info(result.message);
           }
           process.exit(0);
         } else {
           if (options.outputFormat === 'json') {
+            logger.error(JSON.stringify(result, null, 2));
           } else {
-            logger.error('Task failed');
-            if ('message' in result && result.message) {
-            }
+            logger.error(result.message);
           }
           process.exit(1);
         }

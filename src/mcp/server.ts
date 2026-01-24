@@ -13,16 +13,7 @@ export const createServer = (context: Context) => {
   });
 
   const agentDescriptions = context.agents
-    .map((agent) => {
-      const primaryAgentConfig = agent.models[0];
-      if (primaryAgentConfig === undefined) {
-        return undefined;
-      }
-      const modelInfo =
-        primaryAgentConfig.model !== undefined ? ` (${primaryAgentConfig.model})` : '';
-      return `- ${agent.name}: ${agent.description} [${primaryAgentConfig.sdkType}${modelInfo}]`;
-    })
-    .filter((desc): desc is string => desc !== undefined)
+    .map((agent) => `- ${agent.name}: ${agent.description}`)
     .join('\n');
 
   const superSubagents = SuperSubagents(context);

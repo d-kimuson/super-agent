@@ -142,29 +142,16 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
                   error: message.errors.join('\n'),
                 };
 
-                const nextSession: FailedSession | PausedSession =
-                  currentProcess.sdkSessionId === undefined
-                    ? {
-                        ...session,
-                        status: 'failed',
-                        sdkSessionId: currentProcess.sdkSessionId,
-                        currentTurn: nextTurn,
-                        turns: [
-                          ...session.turns.filter((task) => task.id !== session.currentTurn.id),
-                          nextTurn,
-                        ],
-                        error: message.errors.join('\n'),
-                      }
-                    : {
-                        ...session,
-                        status: 'paused',
-                        sdkSessionId: currentProcess.sdkSessionId,
-                        currentTurn: nextTurn,
-                        turns: [
-                          ...session.turns.filter((task) => task.id !== session.currentTurn.id),
-                          nextTurn,
-                        ],
-                      };
+                const nextSession: PausedSession = {
+                  ...session,
+                  status: 'paused',
+                  sdkSessionId: currentProcess.sdkSessionId,
+                  currentTurn: nextTurn,
+                  turns: [
+                    ...session.turns.filter((task) => task.id !== session.currentTurn.id),
+                    nextTurn,
+                  ],
+                };
 
                 currentProcess.stoppedPromise.resolve(nextSession);
               }

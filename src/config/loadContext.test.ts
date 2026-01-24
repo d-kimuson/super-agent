@@ -150,12 +150,13 @@ describe('loadContext', () => {
         },
       });
 
-      expect(context.agents).toHaveLength(7);
+      expect(context.agents).toHaveLength(8);
 
       const agentNames = context.agents.map((a) => a.name).sort();
       expect(agentNames).toEqual([
         'architect',
         'engineer',
+        'general',
         'qa',
         'researcher',
         'reviewer',
@@ -243,8 +244,8 @@ Prompt 2`,
             'agents-dir': [tempDir1, tempDir2],
           },
         });
-        expect(context.agents).toHaveLength(2);
-        expect(context.agents.map((a) => a.name).sort()).toEqual(['agent1', 'agent2']);
+        expect(context.agents).toHaveLength(3);
+        expect(context.agents.map((a) => a.name).sort()).toEqual(['agent1', 'agent2', 'general']);
       } finally {
         rmSync(tempDir1, { recursive: true, force: true });
         rmSync(tempDir2, { recursive: true, force: true });
@@ -274,8 +275,8 @@ Prompt`,
             'agents-dir': [tempDir],
           },
         });
-        expect(context.agents).toHaveLength(1);
-        expect(context.agents[0]?.name).toBe('valid');
+        expect(context.agents).toHaveLength(2);
+        expect(context.agents.map((a) => a.name).sort()).toEqual(['general', 'valid']);
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
@@ -301,7 +302,8 @@ agents:
             'agents-dir': [tempDir],
           },
         });
-        expect(context.agents).toHaveLength(0);
+        expect(context.agents).toHaveLength(1);
+        expect(context.agents[0]?.name).toBe('general');
         expect(stderrWriteSpy).toHaveBeenCalledWith(
           expect.stringContaining('[Warning] Skipping invalid Agent file'),
         );
@@ -316,7 +318,8 @@ agents:
           'agents-dir': ['/non/existent/path'],
         },
       });
-      expect(context.agents).toHaveLength(0);
+      expect(context.agents).toHaveLength(1);
+      expect(context.agents[0]?.name).toBe('general');
       expect(stderrWriteSpy).toHaveBeenCalledWith(
         expect.stringContaining('[Warning] Agent directory not found'),
       );
@@ -324,7 +327,8 @@ agents:
 
     it('should return empty agents when no directories provided', async () => {
       const context = await loadContext({});
-      expect(context.agents).toHaveLength(0);
+      expect(context.agents).toHaveLength(1);
+      expect(context.agents[0]?.name).toBe('general');
     });
   });
 
@@ -336,7 +340,7 @@ agents:
           'agents-dir': [agentDir],
         },
       });
-      expect(context.agents).toHaveLength(7);
+      expect(context.agents).toHaveLength(8);
     });
 
     it('should load with empty config file', async () => {
@@ -364,7 +368,7 @@ Prompt`,
             'agents-dir': [tempDir],
           },
         });
-        expect(context.agents).toHaveLength(1);
+        expect(context.agents).toHaveLength(2);
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
@@ -378,7 +382,7 @@ Prompt`,
           'agents-dir': [agentDir],
         },
       });
-      expect(context.agents).toHaveLength(7);
+      expect(context.agents).toHaveLength(8);
     });
 
     it('should warn on invalid config file and continue', async () => {
@@ -406,7 +410,7 @@ Prompt`,
             'agents-dir': [tempDir],
           },
         });
-        expect(context.agents).toHaveLength(1);
+        expect(context.agents).toHaveLength(2);
         expect(stderrWriteSpy).toHaveBeenCalledWith(
           expect.stringContaining('[Warning] Invalid config file'),
         );

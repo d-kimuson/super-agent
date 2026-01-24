@@ -18,8 +18,6 @@ const sessionConfig: SessionConfig = {
   streaming: true,
 };
 
-const defaultModel = 'claude-sonnet-4.5';
-
 type PendingSessionProcess = {
   status: 'pending';
   copilotSession: CopilotSession;
@@ -172,7 +170,7 @@ export const CopilotAgentSDKAdapter = (): AgentSDKAdapter => {
       const copilotSession = await client.createSession({
         ...sessionConfig,
         sessionId: sdkSessionId,
-        model: session.currentTurn.model ?? defaultModel,
+        model: session.currentTurn.model ?? 'default',
       });
 
       const { stoppedPromise } = copilotRun(session, copilotSession);

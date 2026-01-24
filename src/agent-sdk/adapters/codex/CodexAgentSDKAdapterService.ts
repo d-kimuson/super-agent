@@ -189,29 +189,16 @@ export const CodexAgentSDKAdapter = (): AgentSDKAdapter => {
                   error: event,
                 };
 
-                const nextSession: FailedSession | PausedSession =
-                  currentProcess.sdkSessionId === undefined
-                    ? {
-                        ...session,
-                        status: 'failed',
-                        sdkSessionId: currentProcess.sdkSessionId,
-                        currentTurn: nextTurn,
-                        turns: [
-                          ...session.turns.filter((task) => task.id !== session.currentTurn.id),
-                          nextTurn,
-                        ],
-                        error: event,
-                      }
-                    : {
-                        ...session,
-                        status: 'paused',
-                        sdkSessionId: currentProcess.sdkSessionId,
-                        currentTurn: nextTurn,
-                        turns: [
-                          ...session.turns.filter((task) => task.id !== session.currentTurn.id),
-                          nextTurn,
-                        ],
-                      };
+                const nextSession: PausedSession = {
+                  ...session,
+                  status: 'paused',
+                  sdkSessionId: currentProcess.sdkSessionId,
+                  currentTurn: nextTurn,
+                  turns: [
+                    ...session.turns.filter((task) => task.id !== session.currentTurn.id),
+                    nextTurn,
+                  ],
+                };
 
                 currentProcess.stoppedPromise.resolve(nextSession);
               }

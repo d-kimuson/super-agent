@@ -7,19 +7,15 @@ export const composePrompt = (input: {
 }): string => {
   const { agentPrompt, userInput, enabledSkills } = input;
 
-  return `${agentPrompt === undefined ? `` : `${agentPrompt}\n\n---\n\n`}## Enabled Skills
-
-${enabledSkills
-  .map((skill) => {
-    return `<skill name="${skill.name}" path="${skill.path}">
+  const skillPrompt = enabledSkills
+    .map((skill) => {
+      return `<skill name="${skill.name}" path="${skill.path}">
 ${skill.prompt}
 </skill>`;
-  })
-  .join('\n\n')}
+    })
+    .join('\n\n');
 
----
-
-## User Input
+  return `${agentPrompt === undefined ? `` : `${agentPrompt}\n\n---\n\n`}${skillPrompt.length === 0 ? '' : `## Enabled Skills\n\n${skillPrompt}\n\n---\n\n`}## User Input
 
 ${userInput}`;
 };

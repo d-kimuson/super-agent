@@ -39,14 +39,6 @@ const logArgsToString = (args: readonly unknown[]): string => {
         return `${arg.name}: ${arg.message}${arg.stack !== undefined ? `\n${arg.stack}` : ''}`;
       }
 
-      if (arg === null) {
-        return 'null';
-      }
-
-      if (arg === undefined) {
-        return 'undefined';
-      }
-
       if (typeof arg === 'object') {
         try {
           return JSON.stringify(arg, null, 2);

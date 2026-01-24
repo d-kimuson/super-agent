@@ -6,6 +6,7 @@ const createConfig = (overrides: Partial<Config> = {}): Config => ({
   ssaDir: '/tmp/ssa',
   availableProviders: ['claude', 'codex', 'copilot', 'gemini'],
   disabledModels: [],
+  defaultModel: { sdkType: 'claude', model: 'default' },
   agentsDirs: [],
   skillsDirs: [],
   ...overrides,
@@ -119,7 +120,11 @@ describe('selectModel', () => {
   describe('error messages', () => {
     it('includes available providers in error message', () => {
       const agentModels: AgentModel[] = [];
-      const config = createConfig({ availableProviders: ['claude', 'codex'] });
+      // Set defaultModel to a provider not in availableProviders to force error
+      const config = createConfig({
+        availableProviders: ['claude', 'codex'],
+        defaultModel: { sdkType: 'gemini', model: 'flash' },
+      });
 
       const result = selectModel({ agentModels, config });
 
@@ -131,7 +136,10 @@ describe('selectModel', () => {
 
     it('includes disabled models in error message', () => {
       const agentModels: AgentModel[] = [];
-      const config = createConfig({ disabledModels: ['sonnet', 'haiku'] });
+      // Disable the default model to force error
+      const config = createConfig({
+        disabledModels: ['sonnet', 'haiku', 'default'],
+      });
 
       const result = selectModel({ agentModels, config });
 
