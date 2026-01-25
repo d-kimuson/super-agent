@@ -55,24 +55,24 @@ export const configFileSchema = z.object({
 });
 
 export const envVarsSchema = z.object({
-  SSA_DIR: configRestrictions.ssaDir.optional(),
-  SSA_AVAILABLE_PROVIDERS: z.string().optional(),
-  SSA_DISABLED_MODELS: z.string().optional(),
-  SSA_DEFAULT_MODEL: z.string().optional(),
-  SSA_AGENT_DIRS: z.string().optional(),
-  SSA_SKILL_DIRS: z.string().optional(),
+  SA_DIR: configRestrictions.ssaDir.optional(),
+  SA_AVAILABLE_PROVIDERS: z.string().optional(),
+  SA_DISABLED_MODELS: z.string().optional(),
+  SA_DEFAULT_MODEL: z.string().optional(),
+  SA_AGENT_DIRS: z.string().optional(),
+  SA_SKILL_DIRS: z.string().optional(),
 });
 
 /**
  * EnvVars after parsing and transformation
  */
 export const parsedEnvVarsSchema = z.object({
-  SSA_DIR: configRestrictions.ssaDir.optional(),
-  SSA_AVAILABLE_PROVIDERS: configRestrictions.availableProviders.optional(),
-  SSA_DISABLED_MODELS: configRestrictions.disabledModels.optional(),
-  SSA_DEFAULT_MODEL: configRestrictions.defaultModelText.optional(),
-  SSA_AGENT_DIRS: configRestrictions.agentDirs.optional(),
-  SSA_SKILL_DIRS: configRestrictions.skillDirs.optional(),
+  SA_DIR: configRestrictions.ssaDir.optional(),
+  SA_AVAILABLE_PROVIDERS: configRestrictions.availableProviders.optional(),
+  SA_DISABLED_MODELS: configRestrictions.disabledModels.optional(),
+  SA_DEFAULT_MODEL: configRestrictions.defaultModelText.optional(),
+  SA_AGENT_DIRS: configRestrictions.agentDirs.optional(),
+  SA_SKILL_DIRS: configRestrictions.skillDirs.optional(),
 });
 
 export const cliArgsSchema = z.object({

@@ -66,8 +66,8 @@ describe('loadContext', () => {
       const context = await loadContext({
         cliArgs: { 'ssa-dir': tempDir },
         envVars: {
-          SSA_AGENT_DIRS: '/env/agents',
-          SSA_SKILL_DIRS: '/env/skills',
+          SA_AGENT_DIRS: '/env/agents',
+          SA_SKILL_DIRS: '/env/skills',
         },
       });
 
@@ -86,9 +86,9 @@ describe('loadContext', () => {
 
       const context = await loadContext({
         envVars: {
-          SSA_DIR: tempDir,
-          SSA_AGENT_DIRS: '/env/agents',
-          SSA_SKILL_DIRS: '/env/skills',
+          SA_DIR: tempDir,
+          SA_AGENT_DIRS: '/env/agents',
+          SA_SKILL_DIRS: '/env/skills',
         },
         cliArgs: {
           'agents-dir': ['/cli/agents'],
@@ -120,7 +120,7 @@ describe('loadContext', () => {
       expect(context.config.agentsDirs).toEqual(['/config/agents']);
     });
 
-    it('should resolve config path from SSA_DIR env var', async () => {
+    it('should resolve config path from SA_DIR env var', async () => {
       const ssaDir = tempDir;
       const autoConfigPath = join(ssaDir, 'config.json');
 
@@ -133,7 +133,7 @@ describe('loadContext', () => {
 
       const context = await loadContext({
         envVars: {
-          SSA_DIR: ssaDir,
+          SA_DIR: ssaDir,
         },
       });
 

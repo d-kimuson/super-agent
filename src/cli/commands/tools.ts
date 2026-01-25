@@ -54,11 +54,11 @@ export const createToolsCommand = () => {
         const context = await loadContext({
           cliArgs,
           envVars: {
-            SSA_DIR: env.getEnv('SSA_DIR'),
-            SSA_AVAILABLE_PROVIDERS: env.getEnv('SSA_AVAILABLE_PROVIDERS'),
-            SSA_DISABLED_MODELS: env.getEnv('SSA_DISABLED_MODELS'),
-            SSA_AGENT_DIRS: env.getEnv('SSA_AGENT_DIRS'),
-            SSA_SKILL_DIRS: env.getEnv('SSA_SKILL_DIRS'),
+            SA_DIR: env.getEnv('SA_DIR'),
+            SA_AVAILABLE_PROVIDERS: env.getEnv('SA_AVAILABLE_PROVIDERS'),
+            SA_DISABLED_MODELS: env.getEnv('SA_DISABLED_MODELS'),
+            SA_AGENT_DIRS: env.getEnv('SA_AGENT_DIRS'),
+            SA_SKILL_DIRS: env.getEnv('SA_SKILL_DIRS'),
           },
         });
 

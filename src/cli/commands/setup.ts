@@ -156,10 +156,10 @@ export const createSetupCommand = () => {
           `\n💡 Default model set to: ${config.defaultModel.sdkType}${config.defaultModel.model !== '' ? `:${config.defaultModel.model}` : ''}`,
         );
         logger.info('   To override, use environment variable:');
-        logger.info('   export SSA_DEFAULT_MODEL="provider:model-name"');
+        logger.info('   export SA_DEFAULT_MODEL="provider:model-name"');
       } else {
         logger.info(`\n💡 To set default model, use environment variable:`);
-        logger.info('   export SSA_DEFAULT_MODEL="provider:model-name"');
+        logger.info('   export SA_DEFAULT_MODEL="provider:model-name"');
       }
 
       logger.info(`\n🎉 Setup completed!`);
