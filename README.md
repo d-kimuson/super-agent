@@ -1,6 +1,6 @@
-# @kimuson/super-subagents
+# @kimuson/super-agent
 
-`@kimuson/super-subagents` is a small adapter layer that lets you access multiple Agent SDKs through a unified interface.
+`@kimuson/super-agent` is a small adapter layer that lets you access multiple Agent SDKs through a unified interface.
 
 Target SDKs:
 
@@ -14,15 +14,15 @@ This repository aims to make it easy to switch providers without rewriting your 
 ## Install
 
 ```bash
-pnpm add @kimuson/super-subagents
+pnpm add @kimuson/super-agent
 ```
 
 ## Packages
 
-- `@kimuson/super-subagents`
+- `@kimuson/super-agent`
   CLI entrypoint (primarily for exposing MCP)
 
-- `@kimuson/super-subagents/sdk`
+- `@kimuson/super-agent/sdk`
   TypeScript SDK entrypoint (for importing from your app)
 
 ## License

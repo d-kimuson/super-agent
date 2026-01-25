@@ -1,6 +1,7 @@
 ---
 name: typescript
 description: TypeScript best practices and patterns for writing type-safe code
+path: typescript
 ---
 
 Write TypeScript code following these principles:

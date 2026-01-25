@@ -1,10 +1,10 @@
 {
-  "name": "@kimuson/super-subagents",
+  "name": "@kimuson/super-agent",
   "version": "0.0.0",
   "description": "FIXME",
   "license": "MIT",
   "bin": {
-    "super-subagents": "./dist/cli/index.mjs"
+    "super-agent": "./dist/cli/index.mjs"
   },
   "files": [
     "dist"

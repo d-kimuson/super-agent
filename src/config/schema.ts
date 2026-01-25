@@ -56,23 +56,23 @@ export const configFileSchema = z.object({
 
 export const envVarsSchema = z.object({
   SSA_DIR: configRestrictions.ssaDir.optional(),
-  SSA_AVAILABLE_PROVIDERS: z
-    .string()
-    .optional()
-    .transform((value) => value?.split(',') ?? []),
-  SSA_DISABLED_MODELS: z
-    .string()
-    .optional()
-    .transform((value) => value?.split(',') ?? []),
+  SSA_AVAILABLE_PROVIDERS: z.string().optional(),
+  SSA_DISABLED_MODELS: z.string().optional(),
+  SSA_DEFAULT_MODEL: z.string().optional(),
+  SSA_AGENT_DIRS: z.string().optional(),
+  SSA_SKILL_DIRS: z.string().optional(),
+});
+
+/**
+ * EnvVars after parsing and transformation
+ */
+export const parsedEnvVarsSchema = z.object({
+  SSA_DIR: configRestrictions.ssaDir.optional(),
+  SSA_AVAILABLE_PROVIDERS: configRestrictions.availableProviders.optional(),
+  SSA_DISABLED_MODELS: configRestrictions.disabledModels.optional(),
   SSA_DEFAULT_MODEL: configRestrictions.defaultModelText.optional(),
-  SSA_AGENT_DIRS: z
-    .string()
-    .optional()
-    .transform((value) => value?.split(',') ?? []),
-  SSA_SKILL_DIRS: z
-    .string()
-    .optional()
-    .transform((value) => value?.split(',') ?? []),
+  SSA_AGENT_DIRS: configRestrictions.agentDirs.optional(),
+  SSA_SKILL_DIRS: configRestrictions.skillDirs.optional(),
 });
 
 export const cliArgsSchema = z.object({
@@ -85,7 +85,7 @@ export const cliArgsSchema = z.object({
 });
 
 export const configSchema = z.object({
-  ssaDir: configRestrictions.ssaDir.optional().default(resolve(homedir(), '.super-subagents')),
+  ssaDir: configRestrictions.ssaDir.optional().default(resolve(homedir(), '.super-agent')),
   availableProviders: configRestrictions.availableProviders
     .optional()
     .default(['claude', 'codex', 'copilot', 'gemini']),
@@ -103,6 +103,7 @@ export type AgentConfig = z.infer<typeof agentConfigSchema>;
 export type SkillConfig = z.infer<typeof skillConfigSchema>;
 export type ConfigFile = z.infer<typeof configFileSchema>;
 export type EnvVars = z.infer<typeof envVarsSchema>;
+export type ParsedEnvVars = z.infer<typeof parsedEnvVarsSchema>;
 export type CliArgs = z.infer<typeof cliArgsSchema>;
 
 /**

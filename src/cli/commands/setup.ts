@@ -26,7 +26,7 @@ export const createSetupCommand = () => {
     try {
       logger.info('🚀 Starting Super Subagents setup\n');
 
-      const configDir = resolve(homedir(), '.super-subagents');
+      const configDir = resolve(homedir(), '.super-agent');
       const configPath = resolve(configDir, 'config.json');
 
       // Warn if existing config file exists

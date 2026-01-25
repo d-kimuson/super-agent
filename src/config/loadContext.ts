@@ -3,7 +3,15 @@ import { resolve } from 'node:path';
 import { loadConfig } from './loadConfig';
 import { loadAgentsFromDirectory } from './markdown/agents';
 import { loadSkillsFromDirectory } from './markdown/skills';
-import { type CliArgs, type Config, type ConfigFile, configSchema, type EnvVars } from './schema';
+import {
+  type CliArgs,
+  type Config,
+  type ConfigFile,
+  configSchema,
+  type EnvVars,
+  type ParsedEnvVars,
+  parsedEnvVarsSchema,
+} from './schema';
 import { type Context } from './types';
 
 export type LoadContextOptions = {
@@ -17,10 +25,24 @@ export type LoadContextOptions = {
  */
 const resolveConfigPath = (
   cliArgs: Partial<CliArgs>,
-  envVars: Partial<EnvVars>,
+  envVars: Partial<ParsedEnvVars>,
 ): string | undefined => {
-  const ssaDir = cliArgs['ssa-dir'] ?? envVars.SSA_DIR ?? resolve(homedir(), '.super-subagents');
+  const ssaDir = cliArgs['ssa-dir'] ?? envVars.SSA_DIR ?? resolve(homedir(), '.super-agent');
   return resolve(ssaDir, 'config.json');
+};
+
+/**
+ * EnvVars を ParsedEnvVars に変換する
+ */
+const parseEnvVars = (envVars: Partial<EnvVars>): Partial<ParsedEnvVars> => {
+  return parsedEnvVarsSchema.partial().parse({
+    SSA_DIR: envVars.SSA_DIR,
+    SSA_AVAILABLE_PROVIDERS: envVars.SSA_AVAILABLE_PROVIDERS?.split(','),
+    SSA_DISABLED_MODELS: envVars.SSA_DISABLED_MODELS?.split(','),
+    SSA_DEFAULT_MODEL: envVars.SSA_DEFAULT_MODEL,
+    SSA_AGENT_DIRS: envVars.SSA_AGENT_DIRS?.split(','),
+    SSA_SKILL_DIRS: envVars.SSA_SKILL_DIRS?.split(','),
+  });
 };
 
 /**
@@ -29,7 +51,7 @@ const resolveConfigPath = (
  */
 const mergeConfig = (
   configFile: ConfigFile,
-  envVars: Partial<EnvVars>,
+  envVars: Partial<ParsedEnvVars>,
   cliArgs: Partial<CliArgs>,
 ): Config => {
   const merged = {
@@ -50,13 +72,15 @@ const mergeConfig = (
       (envVars.SSA_AGENT_DIRS !== undefined && envVars.SSA_AGENT_DIRS.length > 0
         ? envVars.SSA_AGENT_DIRS
         : undefined) ??
-      configFile.agentDirs,
+      configFile.agentDirs ??
+      [],
     skillsDirs:
       cliArgs['skills-dir'] ??
       (envVars.SSA_SKILL_DIRS !== undefined && envVars.SSA_SKILL_DIRS.length > 0
         ? envVars.SSA_SKILL_DIRS
         : undefined) ??
-      configFile.skillDirs,
+      configFile.skillDirs ??
+      [],
   };
 
   return configSchema.parse(merged);
@@ -68,7 +92,10 @@ const mergeConfig = (
  */
 export const loadContext = async (options: LoadContextOptions = {}): Promise<Context> => {
   const cliArgs = options.cliArgs ?? {};
-  const envVars = options.envVars ?? {};
+  const rawEnvVars = options.envVars ?? {};
+
+  // EnvVars をパース
+  const envVars = parseEnvVars(rawEnvVars);
 
   const configFilePath = resolveConfigPath(cliArgs, envVars);
 
