@@ -54,19 +54,24 @@ const mergeConfig = (
   envVars: Partial<ParsedEnvVars>,
   cliArgs: Partial<CliArgs>,
 ): Config => {
+  const defaultModel =
+    configFile?.defaultModel ?? cliArgs['default-model'] ?? envVars.SA_DEFAULT_MODEL;
+
   const merged = {
     ssaDir: cliArgs['ssa-dir'] ?? envVars.SA_DIR,
     availableProviders:
       cliArgs['available-providers'] ??
       (envVars.SA_AVAILABLE_PROVIDERS !== undefined && envVars.SA_AVAILABLE_PROVIDERS.length > 0
         ? envVars.SA_AVAILABLE_PROVIDERS
-        : undefined),
+        : defaultModel?.sdkType !== undefined
+          ? [defaultModel.sdkType]
+          : undefined),
     disabledModels:
       cliArgs['disabled-models'] ??
       (envVars.SA_DISABLED_MODELS !== undefined && envVars.SA_DISABLED_MODELS.length > 0
         ? envVars.SA_DISABLED_MODELS
         : undefined),
-    defaultModel: configFile?.defaultModel ?? cliArgs['default-model'] ?? envVars.SA_DEFAULT_MODEL,
+    defaultModel,
     agentsDirs:
       cliArgs['agents-dir'] ??
       (envVars.SA_AGENT_DIRS !== undefined && envVars.SA_AGENT_DIRS.length > 0
