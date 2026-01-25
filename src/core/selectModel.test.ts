@@ -21,7 +21,7 @@ describe('selectModel', () => {
       ];
       const config = createConfig();
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result).toEqual({ code: 'success', model: { sdkType: 'claude', model: 'sonnet' } });
     });
@@ -33,7 +33,7 @@ describe('selectModel', () => {
       ];
       const config = createConfig({ availableProviders: ['codex', 'copilot', 'gemini'] });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result).toEqual({
         code: 'success',
@@ -48,7 +48,7 @@ describe('selectModel', () => {
       ];
       const config = createConfig({ disabledModels: ['sonnet'] });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result).toEqual({ code: 'success', model: { sdkType: 'claude', model: 'haiku' } });
     });
@@ -60,9 +60,24 @@ describe('selectModel', () => {
       ];
       const config = createConfig({ disabledModels: ['claude:sonnet'] });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result).toEqual({ code: 'success', model: { sdkType: 'codex', model: 'sonnet' } });
+    });
+
+    it('skips models with disabled SDK type', () => {
+      const agentModels: AgentModel[] = [
+        { sdkType: 'claude', model: 'sonnet' },
+        { sdkType: 'codex', model: 'gpt-5.2-codex' },
+      ];
+      const config = createConfig();
+
+      const result = selectModel({ agentModels, config, disabledSdkTypes: ['claude'] });
+
+      expect(result).toEqual({
+        code: 'success',
+        model: { sdkType: 'codex', model: 'gpt-5.2-codex' },
+      });
     });
   });
 
@@ -74,7 +89,7 @@ describe('selectModel', () => {
         defaultModel: { sdkType: 'codex', model: 'gpt-5.2-codex' },
       });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result).toEqual({
         code: 'success',
@@ -88,7 +103,7 @@ describe('selectModel', () => {
         defaultModel: { sdkType: 'claude', model: 'sonnet' },
       });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result).toEqual({ code: 'success', model: { sdkType: 'claude', model: 'sonnet' } });
     });
@@ -100,7 +115,7 @@ describe('selectModel', () => {
         defaultModel: { sdkType: 'claude', model: 'haiku' },
       });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result.code).toBe('no-available-model');
     });
@@ -111,7 +126,7 @@ describe('selectModel', () => {
         availableProviders: ['codex'],
       });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result.code).toBe('no-available-model');
     });
@@ -126,7 +141,7 @@ describe('selectModel', () => {
         defaultModel: { sdkType: 'gemini', model: 'flash' },
       });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result.code).toBe('no-available-model');
       if (result.code === 'no-available-model') {
@@ -141,7 +156,7 @@ describe('selectModel', () => {
         disabledModels: ['sonnet', 'haiku', 'default'],
       });
 
-      const result = selectModel({ agentModels, config });
+      const result = selectModel({ agentModels, config, disabledSdkTypes: [] });
 
       expect(result.code).toBe('no-available-model');
       if (result.code === 'no-available-model') {

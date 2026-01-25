@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AgentSdk } from '../agent-sdk/AgentSdk';
 import { type FailedSession, type PausedSession } from '../agent-sdk/types';
+import { providersSchema } from '../config/schema';
 import { type Context } from '../config/types';
 import { composePrompt } from './composePrompt';
 import { selectModel } from './selectModel';
@@ -11,7 +12,7 @@ const agentTaskOutputSchema = z.object({
   sessionId: z.string(),
 });
 
-export const SuperSubagents = (context: Context) => {
+export const AgentToolsService = (context: Context) => {
   const { agents, skills, config } = context;
 
   const backgroundTaskMap = new Map<
@@ -36,6 +37,12 @@ export const SuperSubagents = (context: Context) => {
       .optional()
       .default(false)
       .describe('Whether to run the task in the background'),
+    disabledSdkTypes: z
+      .array(providersSchema)
+      .optional()
+      .describe(
+        'SDK types to exclude from selection. Useful for falling back to other providers when encountering rate limits or network errors',
+      ),
   });
 
   const agentTask = async (input: z.infer<typeof agentTaskArgsSchema>): Promise<ToolResult> => {
@@ -52,7 +59,11 @@ export const SuperSubagents = (context: Context) => {
     }
 
     // Select model with filtering and fallback
-    const modelResult = selectModel({ agentModels: matchAgent.models, config });
+    const modelResult = selectModel({
+      agentModels: matchAgent.models,
+      config,
+      disabledSdkTypes: input.disabledSdkTypes ?? [],
+    });
 
     if (modelResult.code !== 'success') {
       return {
@@ -104,6 +115,7 @@ export const SuperSubagents = (context: Context) => {
         success: true,
         sessionId: result.session.sdkSessionId,
         message: `Task started in background. Session ID: ${result.session.sdkSessionId}`,
+        sdkType: result.session.sdkType,
       } as const;
     }
 

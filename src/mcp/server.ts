@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import packageJson from '../../package.json' with { type: 'json' };
 import { type Context } from '../config/types';
-import { SuperSubagents } from '../core/SuperSubagents';
+import { AgentToolsService } from '../core/AgentToolsService';
 import { errorToString } from '../lib/errorToString';
 import { mapToolResultToMcpResponse } from '../lib/mapToolResultToMcpResponse';
 
@@ -16,7 +16,7 @@ export const createServer = (context: Context) => {
     .map((agent) => `- ${agent.name}: ${agent.description}`)
     .join('\n');
 
-  const superSubagents = SuperSubagents(context);
+  const superSubagents = AgentToolsService(context);
 
   server.registerTool(
     'agent-task',

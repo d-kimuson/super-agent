@@ -14,6 +14,7 @@ export const stoppedSessionToResult = (session: PausedSession | FailedSession): 
         success: true,
         message: session.currentTurn.output + '\n\n---\n\n' + resumeMessage,
         sessionId,
+        sdkType: session.sdkType,
       } as const;
     } else {
       return {

@@ -1,8 +1,8 @@
 import { Command, type Command as CommandType } from 'commander';
 import { env } from '../../config/env';
 import { loadContext } from '../../config/loadContext';
-import { cliArgsSchema } from '../../config/schema';
-import { SuperSubagents } from '../../core/SuperSubagents';
+import { cliArgsSchema, providersSchema } from '../../config/schema';
+import { AgentToolsService } from '../../core/AgentToolsService';
 import { logger } from '../../lib/logger';
 
 type GlobalOptions = {
@@ -26,6 +26,10 @@ export const createToolsCommand = () => {
       '-r, --resume <sessionId>',
       'Optional session ID to continue from a previous conversation',
     )
+    .option(
+      '--disabled-sdk-types <types>',
+      'Comma-separated list of SDK types to exclude (e.g., claude,codex)',
+    )
     .option('-o, --output-format <format>', 'Output format: message (default) or json', 'message')
     .action(async function (
       this: CommandType,
@@ -33,6 +37,7 @@ export const createToolsCommand = () => {
         agentType?: string;
         prompt: string;
         resume?: string;
+        disabledSdkTypes?: string;
         outputFormat: string;
       },
     ) {
@@ -62,7 +67,23 @@ export const createToolsCommand = () => {
           },
         });
 
-        const superSubagents = SuperSubagents(context);
+        const superSubagents = AgentToolsService(context);
+
+        // Parse disabledSdkTypes from comma-separated string
+        const disabledSdkTypes =
+          options.disabledSdkTypes !== undefined && options.disabledSdkTypes.length > 0
+            ? options.disabledSdkTypes
+                .split(',')
+                .map((s) => s.trim())
+                .filter((s): s is 'claude' | 'codex' | 'copilot' | 'gemini' => {
+                  const parsed = providersSchema.safeParse(s);
+                  if (!parsed.success) {
+                    logger.warn(`Invalid SDK type ignored: ${s}`);
+                    return false;
+                  }
+                  return true;
+                })
+            : undefined;
 
         // agent-task を実行
         const result = await superSubagents.agentTask({
@@ -71,6 +92,7 @@ export const createToolsCommand = () => {
           prompt: options.prompt,
           resume: options.resume,
           runInBackground: false,
+          disabledSdkTypes,
         });
 
         // 結果を出力

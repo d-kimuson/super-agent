@@ -9,6 +9,7 @@ describe('mapToolResultToMcpResponse', () => {
         success: true,
         sessionId: 'session-123',
         message: 'Task completed successfully',
+        sdkType: 'claude',
       };
 
       const response = mapToolResultToMcpResponse(result);
@@ -22,6 +23,7 @@ describe('mapToolResultToMcpResponse', () => {
         success: true,
         sessionId: 'id',
         message: 'Message with\nnewlines\tand\ttabs',
+        sdkType: 'claude',
       };
 
       const response = mapToolResultToMcpResponse(result);
@@ -34,6 +36,7 @@ describe('mapToolResultToMcpResponse', () => {
         success: true,
         sessionId: 'id',
         message: '',
+        sdkType: 'claude',
       };
 
       const response = mapToolResultToMcpResponse(result);
@@ -90,6 +93,7 @@ describe('mapToolResultToMcpResponse', () => {
         success: true,
         sessionId: 'id',
         message: 'success',
+        sdkType: 'claude',
       };
       const failureResult: ToolResult = {
         success: false,
@@ -106,6 +110,7 @@ describe('mapToolResultToMcpResponse', () => {
         success: true,
         sessionId: 'id',
         message: 'test',
+        sdkType: 'claude',
       };
 
       const response = mapToolResultToMcpResponse(result);

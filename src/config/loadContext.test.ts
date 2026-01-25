@@ -1,5 +1,4 @@
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { loadContext } from './loadContext';
@@ -30,9 +29,15 @@ describe('loadContext', () => {
     });
 
     it('should use default values when no config provided', async () => {
-      const context = await loadContext({});
+      // Use a non-existent directory to avoid loading user's config
+      const nonExistentDir = join(process.cwd(), '__non_existent_test_dir__');
+      const context = await loadContext({
+        cliArgs: {
+          'ssa-dir': nonExistentDir,
+        },
+      });
 
-      expect(context.config.ssaDir).toBe(join(homedir(), '.super-agent'));
+      expect(context.config.ssaDir).toBe(nonExistentDir);
       expect(context.config.availableProviders).toEqual(['claude', 'codex', 'copilot', 'gemini']);
       expect(context.config.disabledModels).toEqual([]);
       expect(context.config.agentsDirs).toEqual([]);
@@ -324,7 +329,13 @@ agents:
     });
 
     it('should return empty agents when no directories provided', async () => {
-      const context = await loadContext({});
+      // Use a non-existent directory to avoid loading user's config
+      const nonExistentDir = join(process.cwd(), '__non_existent_test_dir__');
+      const context = await loadContext({
+        cliArgs: {
+          'ssa-dir': nonExistentDir,
+        },
+      });
       expect(context.agents).toHaveLength(1);
       expect(context.agents[0]?.name).toBe('general');
     });
@@ -539,7 +550,13 @@ Prompt`,
     });
 
     it('should return empty skills when no skill directories provided', async () => {
-      const context = await loadContext({});
+      // Use a non-existent directory to avoid loading user's config
+      const nonExistentDir = join(process.cwd(), '__non_existent_test_dir__');
+      const context = await loadContext({
+        cliArgs: {
+          'ssa-dir': nonExistentDir,
+        },
+      });
       expect(context.skills).toHaveLength(0);
     });
   });
