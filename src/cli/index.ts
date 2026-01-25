@@ -5,6 +5,7 @@ import packageJson from '../../package.json' with { type: 'json' };
 import { logger } from '../lib/logger';
 import { createMcpCommand } from './commands/mcp';
 import { createSetupCommand } from './commands/setup';
+import { createShowContextCommand } from './commands/show-context';
 import { createToolsCommand } from './commands/tools';
 
 export const createProgram = () => {
@@ -26,6 +27,7 @@ export const createProgram = () => {
   // commands
   program.addCommand(createMcpCommand());
   program.addCommand(createSetupCommand());
+  program.addCommand(createShowContextCommand());
   program.addCommand(createToolsCommand());
 
   return program;
