@@ -16,8 +16,8 @@ import { type AgentSDKAdapter } from '../types';
 
 const threadOptions: ThreadOptions = {
   skipGitRepoCheck: true,
-  sandboxMode: 'workspace-write',
-  approvalPolicy: 'untrusted',
+  sandboxMode: 'danger-full-access',
+  approvalPolicy: 'never',
 };
 
 type PendingSessionProcess = {

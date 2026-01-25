@@ -26,6 +26,7 @@ export const SuperSubagents = (context: Context) => {
   const agentTaskArgsSchema = z.object({
     agentType: z.enum(agentNames).optional().describe('The agent to use for this task'),
     prompt: z.string().describe('The instruction/prompt for the agent'),
+    cwd: z.string().describe('The working directory for the agent'),
     resume: z
       .string()
       .optional()
@@ -75,14 +76,14 @@ export const SuperSubagents = (context: Context) => {
       input.resume === undefined
         ? await sdk.startSession({
             prompt: composedPrompt,
-            cwd: process.cwd(),
+            cwd: input.cwd,
             sdkType: selectedModel.sdkType,
             ...(selectedModel.model !== undefined && { model: selectedModel.model }),
           })
         : await sdk.resumeSession({
             ...selectedModel,
             prompt: composedPrompt,
-            cwd: process.cwd(),
+            cwd: input.cwd,
             sdkSessionId: input.resume,
           });
 

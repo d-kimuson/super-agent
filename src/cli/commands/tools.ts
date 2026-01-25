@@ -67,6 +67,7 @@ export const createToolsCommand = () => {
         // agent-task を実行
         const result = await superSubagents.agentTask({
           agentType: options.agentType,
+          cwd: process.cwd(),
           prompt: options.prompt,
           resume: options.resume,
           runInBackground: false,
