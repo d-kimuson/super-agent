@@ -20,14 +20,17 @@ export const createToolsCommand = () => {
   toolsCommand
     .command('agent-task')
     .description('Execute a task using a configured AI agent')
-    .requiredOption('--agent-type <type>', 'The agent to use for this task')
-    .requiredOption('--prompt <prompt>', 'The instruction/prompt for the agent')
-    .option('--resume <sessionId>', 'Optional session ID to continue from a previous conversation')
-    .option('--output-format <format>', 'Output format: message (default) or json', 'message')
+    .requiredOption('-p, --prompt <prompt>', 'The instruction/prompt for the agent')
+    .option('--agent-type <type>', 'The agent to use for this task')
+    .option(
+      '-r, --resume <sessionId>',
+      'Optional session ID to continue from a previous conversation',
+    )
+    .option('-o, --output-format <format>', 'Output format: message (default) or json', 'message')
     .action(async function (
       this: CommandType,
       options: {
-        agentType: string;
+        agentType?: string;
         prompt: string;
         resume?: string;
         outputFormat: string;

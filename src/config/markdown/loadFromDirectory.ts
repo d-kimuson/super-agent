@@ -12,13 +12,11 @@ export const loadFromDirectory = async <T>(
   entityName: string,
 ): Promise<T[]> => {
   if (!existsSync(dirPath)) {
-    process.stderr.write(`[Warning] ${entityName} directory not found: ${dirPath}\n`);
     return [];
   }
 
   const dirStat = await stat(dirPath);
   if (!dirStat.isDirectory()) {
-    process.stderr.write(`[Warning] Not a directory: ${dirPath}\n`);
     return [];
   }
 

@@ -24,7 +24,7 @@ export const SuperSubagents = (context: Context) => {
   const agentNames = agents.map((agent) => agent.name);
 
   const agentTaskArgsSchema = z.object({
-    agentType: z.enum(agentNames).describe('The agent to use for this task'),
+    agentType: z.enum(agentNames).optional().describe('The agent to use for this task'),
     prompt: z.string().describe('The instruction/prompt for the agent'),
     resume: z
       .string()
@@ -38,7 +38,9 @@ export const SuperSubagents = (context: Context) => {
   });
 
   const agentTask = async (input: z.infer<typeof agentTaskArgsSchema>): Promise<ToolResult> => {
-    const matchAgent = agents.find(({ name }) => name === input.agentType);
+    const matchAgent =
+      agents.find(({ name }) => name === input.agentType) ??
+      agents.find(({ name }) => name === 'general');
 
     if (matchAgent === undefined) {
       return {

@@ -1,14 +1,14 @@
+import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { loadConfig } from './loadConfig';
 import { loadAgentsFromDirectory } from './markdown/agents';
 import { loadSkillsFromDirectory } from './markdown/skills';
-import { type CliArgs, type Config, configSchema, type EnvVars } from './schema';
+import { type CliArgs, type Config, type ConfigFile, configSchema, type EnvVars } from './schema';
 import { type Context } from './types';
 
 export type LoadContextOptions = {
   cliArgs?: Partial<CliArgs>;
   envVars?: Partial<EnvVars>;
-  configFilePath?: string;
 };
 
 /**
@@ -19,11 +19,8 @@ const resolveConfigPath = (
   cliArgs: Partial<CliArgs>,
   envVars: Partial<EnvVars>,
 ): string | undefined => {
-  const ssaDir = cliArgs['ssa-dir'] ?? envVars.SSA_DIR;
-  if (ssaDir !== undefined && ssaDir !== '') {
-    return resolve(ssaDir, 'config.json');
-  }
-  return undefined;
+  const ssaDir = cliArgs['ssa-dir'] ?? envVars.SSA_DIR ?? resolve(homedir(), '.super-subagents');
+  return resolve(ssaDir, 'config.json');
 };
 
 /**
@@ -31,7 +28,7 @@ const resolveConfigPath = (
  * 優先順位: ConfigFile < EnvVars < CliArgs
  */
 const mergeConfig = (
-  configFile: { agentDirs?: string[]; skillDirs?: string[] },
+  configFile: ConfigFile,
   envVars: Partial<EnvVars>,
   cliArgs: Partial<CliArgs>,
 ): Config => {
@@ -47,7 +44,7 @@ const mergeConfig = (
       (envVars.SSA_DISABLED_MODELS !== undefined && envVars.SSA_DISABLED_MODELS.length > 0
         ? envVars.SSA_DISABLED_MODELS
         : undefined),
-    defaultModel: cliArgs['default-model'] ?? envVars.SSA_DEFAULT_MODEL,
+    defaultModel: configFile?.defaultModel ?? cliArgs['default-model'] ?? envVars.SSA_DEFAULT_MODEL,
     agentsDirs:
       cliArgs['agents-dir'] ??
       (envVars.SSA_AGENT_DIRS !== undefined && envVars.SSA_AGENT_DIRS.length > 0
@@ -73,8 +70,7 @@ export const loadContext = async (options: LoadContextOptions = {}): Promise<Con
   const cliArgs = options.cliArgs ?? {};
   const envVars = options.envVars ?? {};
 
-  // Config file path を解決
-  const configFilePath = options.configFilePath ?? resolveConfigPath(cliArgs, envVars);
+  const configFilePath = resolveConfigPath(cliArgs, envVars);
 
   // Config file を読み込み
   const configFile = await loadConfig(configFilePath);

@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 
-const providersSchema = z.enum(['claude', 'codex', 'copilot', 'gemini']);
+export const providersSchema = z.enum(['claude', 'codex', 'copilot', 'gemini']);
 
 export const agentModelSchema = z.object({
   sdkType: providersSchema,
@@ -35,18 +35,21 @@ const parseDefaultModel = (value: string): z.infer<typeof agentModelSchema> => {
   });
 };
 
-const defaultModelSchema = z.string().transform(parseDefaultModel);
-
 const configRestrictions = {
   ssaDir: z.string(),
   availableProviders: z.array(providersSchema),
   disabledModels: z.array(z.string()),
-  defaultModel: defaultModelSchema,
+  defaultModelText: z.string().transform(parseDefaultModel),
+  defaultModelObject: z.object({
+    sdkType: providersSchema,
+    model: z.string().optional(),
+  }),
   agentDirs: z.array(z.string()),
   skillDirs: z.array(z.string()),
 } as const;
 
 export const configFileSchema = z.object({
+  defaultModel: configRestrictions.defaultModelObject.optional(),
   agentDirs: configRestrictions.agentDirs.optional(),
   skillDirs: configRestrictions.skillDirs.optional(),
 });
@@ -61,10 +64,7 @@ export const envVarsSchema = z.object({
     .string()
     .optional()
     .transform((value) => value?.split(',') ?? []),
-  SSA_DEFAULT_MODEL: z
-    .string()
-    .optional()
-    .transform((value) => (value !== undefined ? defaultModelSchema.parse(value) : undefined)),
+  SSA_DEFAULT_MODEL: configRestrictions.defaultModelText.optional(),
   SSA_AGENT_DIRS: z
     .string()
     .optional()
@@ -79,7 +79,7 @@ export const cliArgsSchema = z.object({
   'ssa-dir': configRestrictions.ssaDir.optional(),
   'available-providers': configRestrictions.availableProviders.optional(),
   'disabled-models': configRestrictions.disabledModels.optional(),
-  'default-model': configRestrictions.defaultModel.optional(),
+  'default-model': configRestrictions.defaultModelText.optional(),
   'agents-dir': configRestrictions.agentDirs.optional(),
   'skills-dir': configRestrictions.skillDirs.optional(),
 });
