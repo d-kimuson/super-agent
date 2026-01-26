@@ -1,0 +1,34 @@
+id: minimal
+name: minimal-shell-agent
+inputs:
+  message:
+    type: string
+    default: 'Hello workflow'
+  run-agent:
+    type: boolean
+    default: true
+steps:
+  - id: echo
+    execute:
+      type: shell
+      run: |
+        echo "${{ inputs.message }}"
+  - id: summarize
+    needs: [echo]
+    if: ${{ inputs.run-agent == true }}
+    execute:
+      type: agent
+      agentType: engineer
+      sdkType: claude
+      model: haiku
+      prompt: |
+        次の文章を短く要約してください:
+        ${{ steps.echo.stdout }}
+  - id: done
+    needs: [summarize]
+    if: ${{ inputs.run-agent == true }}
+    execute:
+      type: shell
+      run: |
+        echo "summary:"
+        echo "${{ steps.summarize.output }}"

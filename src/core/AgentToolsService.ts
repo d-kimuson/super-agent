@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AgentSdk } from '../agent-sdk/AgentSdk';
 import { type FailedSession, type PausedSession } from '../agent-sdk/types';
-import { providersSchema } from '../config/schema';
+import { type AgentModel, providersSchema } from '../config/schema';
 import { type Context } from '../config/types';
 import { composePrompt } from './composePrompt';
 import { selectModel } from './selectModel';
@@ -11,6 +11,38 @@ import { type ToolResult } from './types';
 const agentTaskOutputSchema = z.object({
   sessionId: z.string(),
 });
+
+type AgentTaskRawResult =
+  | { success: true; sessionId: string; sdkType: AgentModel['sdkType']; output: string }
+  | { success: false; code: string; message: string; sessionId?: string };
+
+type ResolveAgentSuccess = {
+  ok: true;
+  prompt: string;
+  model: AgentModel;
+};
+
+type ToolError = Extract<ToolResult, { success: false }>;
+
+type ResolveAgentFailure = {
+  ok: false;
+  error: ToolError;
+};
+
+type ResolveAgentResult = ResolveAgentSuccess | ResolveAgentFailure;
+
+type StartSessionSuccess = {
+  ok: true;
+  session: { sdkSessionId: string; sdkType: AgentModel['sdkType'] };
+  stopped: Promise<PausedSession | FailedSession>;
+};
+
+type StartSessionFailure = {
+  ok: false;
+  error: ToolError;
+};
+
+type StartSessionResult = StartSessionSuccess | StartSessionFailure;
 
 export const AgentToolsService = (context: Context) => {
   const { agents, skills, config } = context;
@@ -45,20 +77,22 @@ export const AgentToolsService = (context: Context) => {
       ),
   });
 
-  const agentTask = async (input: z.infer<typeof agentTaskArgsSchema>): Promise<ToolResult> => {
+  const resolveAgent = (input: z.infer<typeof agentTaskArgsSchema>): ResolveAgentResult => {
     const matchAgent =
       agents.find(({ name }) => name === input.agentType) ??
       agents.find(({ name }) => name === 'general');
 
     if (matchAgent === undefined) {
       return {
-        success: false,
-        code: 'agent-not-found',
-        message: `Agent not found: ${input.agentType}`,
-      } as const;
+        ok: false,
+        error: {
+          success: false,
+          code: 'agent-not-found',
+          message: `Agent not found: ${input.agentType}`,
+        },
+      };
     }
 
-    // Select model with filtering and fallback
     const modelResult = selectModel({
       agentModels: matchAgent.models,
       config,
@@ -67,61 +101,149 @@ export const AgentToolsService = (context: Context) => {
 
     if (modelResult.code !== 'success') {
       return {
-        success: false,
-        code: 'agent-model-not-found',
-        message: `No available model for agent "${input.agentType}". ${modelResult.message}`,
-      } as const;
+        ok: false,
+        error: {
+          success: false,
+          code: 'agent-model-not-found',
+          message: `No available model for agent "${input.agentType}". ${modelResult.message}`,
+        },
+      };
     }
 
-    const selectedModel = modelResult.model;
-
-    // Expand skills if specified
     const composedPrompt = composePrompt({
       agentPrompt: matchAgent.prompt,
       userInput: input.prompt,
       enabledSkills: skills.filter((skill) => matchAgent.skills.includes(skill.name)),
     });
+
+    return {
+      ok: true,
+      prompt: composedPrompt,
+      model: modelResult.model,
+    };
+  };
+
+  const startSession = async (
+    input: z.infer<typeof agentTaskArgsSchema>,
+  ): Promise<StartSessionResult> => {
+    const resolved = resolveAgent(input);
+    if (!resolved.ok) {
+      return resolved;
+    }
+
     const sdk = AgentSdk();
+    const selectedModel = resolved.model;
 
     const result =
       input.resume === undefined
         ? await sdk.startSession({
-            prompt: composedPrompt,
+            prompt: resolved.prompt,
             cwd: input.cwd,
             sdkType: selectedModel.sdkType,
             ...(selectedModel.model !== undefined && { model: selectedModel.model }),
           })
         : await sdk.resumeSession({
             ...selectedModel,
-            prompt: composedPrompt,
+            prompt: resolved.prompt,
             cwd: input.cwd,
             sdkSessionId: input.resume,
           });
 
     if (result.code !== 'success') {
       return {
+        ok: false,
+        error: {
+          success: false,
+          code: 'failed-to-start-task',
+          message: `Failed to start task: ${result.code}`,
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      session: {
+        sdkSessionId: result.session.sdkSessionId,
+        sdkType: result.session.sdkType,
+      },
+      stopped: result.stopped,
+    };
+  };
+
+  const agentTask = async (input: z.infer<typeof agentTaskArgsSchema>): Promise<ToolResult> => {
+    const started = await startSession(input);
+    if (!started.ok) {
+      return {
         success: false,
-        code: 'failed-to-start-task',
-        message: `Failed to start task: ${result.code}`,
-      } as const;
+        code: started.error.code,
+        message: started.error.message,
+        sessionId: started.error.sessionId,
+      };
     }
 
     if (input.runInBackground) {
-      backgroundTaskMap.set(result.session.sdkSessionId, {
-        promise: result.stopped,
+      backgroundTaskMap.set(started.session.sdkSessionId, {
+        promise: started.stopped,
       });
 
       return {
         success: true,
-        sessionId: result.session.sdkSessionId,
-        message: `Task started in background. Session ID: ${result.session.sdkSessionId}`,
-        sdkType: result.session.sdkType,
-      } as const;
+        sessionId: started.session.sdkSessionId,
+        message: `Task started in background. Session ID: ${started.session.sdkSessionId}`,
+        sdkType: started.session.sdkType,
+      };
     }
 
-    // await completion
-    const stopped = await result.stopped;
+    const stopped = await started.stopped;
     return stoppedSessionToResult(stopped);
+  };
+
+  const agentTaskRaw = async (
+    input: z.infer<typeof agentTaskArgsSchema>,
+  ): Promise<AgentTaskRawResult> => {
+    if (input.runInBackground) {
+      return {
+        success: false,
+        code: 'background-not-supported',
+        message: 'agentTaskRaw does not support background execution',
+      };
+    }
+
+    const started = await startSession(input);
+    if (!started.ok) {
+      return {
+        success: false,
+        code: started.error.code,
+        message: started.error.message,
+        sessionId: started.error.sessionId,
+      };
+    }
+
+    const stopped = await started.stopped;
+    const sessionId = stopped.sdkSessionId ?? '';
+    if (stopped.status === 'paused') {
+      if (stopped.currentTurn.status === 'completed') {
+        return {
+          success: true,
+          sessionId,
+          sdkType: stopped.sdkType,
+          output: stopped.currentTurn.output,
+        };
+      }
+      return {
+        success: false,
+        code: 'turn-failed',
+        message: String(stopped.currentTurn.error),
+        sessionId,
+      };
+    }
+
+    return {
+      success: false,
+      code: 'session-failed',
+      message: String(stopped.error),
+      sessionId,
+    };
   };
 
   const agentTaskOutput = async (
@@ -133,7 +255,7 @@ export const AgentToolsService = (context: Context) => {
         success: false,
         code: 'task-not-found',
         message: `Task not found: ${input.sessionId}`,
-      } as const;
+      };
     }
 
     const stopped = await task.promise;
@@ -143,7 +265,10 @@ export const AgentToolsService = (context: Context) => {
   return {
     agentTaskArgsSchema,
     agentTask,
+    agentTaskRaw,
     agentTaskOutputSchema,
     agentTaskOutput,
-  } as const;
+  };
 };
+
+export type { AgentTaskRawResult };
