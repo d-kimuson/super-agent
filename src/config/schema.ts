@@ -49,6 +49,8 @@ const configRestrictions = {
 } as const;
 
 export const configFileSchema = z.object({
+  availableProviders: configRestrictions.availableProviders.optional(),
+  disabledModels: configRestrictions.disabledModels.optional(),
   defaultModel: configRestrictions.defaultModelObject.optional(),
   agentDirs: configRestrictions.agentDirs.optional(),
   skillDirs: configRestrictions.skillDirs.optional(),

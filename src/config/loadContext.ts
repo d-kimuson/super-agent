@@ -23,12 +23,17 @@ export type LoadContextOptions = {
  * Config file path を解決する
  * 優先順位: CliArgs > EnvVars > default
  */
-const resolveConfigPath = (
-  cliArgs: Partial<CliArgs>,
-  envVars: Partial<ParsedEnvVars>,
-): string | undefined => {
+const resolveConfigPath = (cliArgs: Partial<CliArgs>, envVars: Partial<ParsedEnvVars>): string => {
   const ssaDir = cliArgs['ssa-dir'] ?? envVars.SA_DIR ?? resolve(homedir(), '.super-agent');
   return resolve(ssaDir, 'config.json');
+};
+
+const resolveLocalConfigPath = (
+  cliArgs: Partial<CliArgs>,
+  envVars: Partial<ParsedEnvVars>,
+): string => {
+  const ssaDir = cliArgs['ssa-dir'] ?? envVars.SA_DIR ?? resolve(homedir(), '.super-agent');
+  return resolve(ssaDir, 'config.local.json');
 };
 
 /**
@@ -47,36 +52,57 @@ const parseEnvVars = (envVars: Partial<EnvVars>): Partial<ParsedEnvVars> => {
 
 /**
  * Config をマージする
- * 優先順位: ConfigFile < EnvVars < CliArgs
+ * 優先順位: ConfigFile < LocalConfig < EnvVars < CliArgs
  */
 const mergeConfig = (
   configFile: ConfigFile,
+  localConfigFile: ConfigFile,
   envVars: Partial<ParsedEnvVars>,
   cliArgs: Partial<CliArgs>,
 ): Config => {
   const defaultModel =
-    configFile?.defaultModel ?? cliArgs['default-model'] ?? envVars.SA_DEFAULT_MODEL;
+    cliArgs['default-model'] ??
+    envVars.SA_DEFAULT_MODEL ??
+    localConfigFile.defaultModel ??
+    configFile.defaultModel;
+
+  const availableProviders =
+    cliArgs['available-providers'] ??
+    (envVars.SA_AVAILABLE_PROVIDERS !== undefined && envVars.SA_AVAILABLE_PROVIDERS.length > 0
+      ? envVars.SA_AVAILABLE_PROVIDERS
+      : undefined) ??
+    (localConfigFile.availableProviders !== undefined &&
+    localConfigFile.availableProviders.length > 0
+      ? localConfigFile.availableProviders
+      : undefined) ??
+    (configFile.availableProviders !== undefined && configFile.availableProviders.length > 0
+      ? configFile.availableProviders
+      : undefined) ??
+    (defaultModel?.sdkType !== undefined ? [defaultModel.sdkType] : undefined);
+
+  const disabledModels =
+    cliArgs['disabled-models'] ??
+    (envVars.SA_DISABLED_MODELS !== undefined && envVars.SA_DISABLED_MODELS.length > 0
+      ? envVars.SA_DISABLED_MODELS
+      : undefined) ??
+    (localConfigFile.disabledModels !== undefined && localConfigFile.disabledModels.length > 0
+      ? localConfigFile.disabledModels
+      : undefined) ??
+    (configFile.disabledModels !== undefined && configFile.disabledModels.length > 0
+      ? configFile.disabledModels
+      : undefined);
 
   const merged = {
     ssaDir: cliArgs['ssa-dir'] ?? envVars.SA_DIR,
-    availableProviders:
-      cliArgs['available-providers'] ??
-      (envVars.SA_AVAILABLE_PROVIDERS !== undefined && envVars.SA_AVAILABLE_PROVIDERS.length > 0
-        ? envVars.SA_AVAILABLE_PROVIDERS
-        : defaultModel?.sdkType !== undefined
-          ? [defaultModel.sdkType]
-          : undefined),
-    disabledModels:
-      cliArgs['disabled-models'] ??
-      (envVars.SA_DISABLED_MODELS !== undefined && envVars.SA_DISABLED_MODELS.length > 0
-        ? envVars.SA_DISABLED_MODELS
-        : undefined),
+    availableProviders,
+    disabledModels,
     defaultModel,
     agentsDirs:
       cliArgs['agents-dir'] ??
       (envVars.SA_AGENT_DIRS !== undefined && envVars.SA_AGENT_DIRS.length > 0
         ? envVars.SA_AGENT_DIRS
         : undefined) ??
+      localConfigFile.agentDirs ??
       configFile.agentDirs ??
       [],
     skillsDirs:
@@ -84,6 +110,7 @@ const mergeConfig = (
       (envVars.SA_SKILL_DIRS !== undefined && envVars.SA_SKILL_DIRS.length > 0
         ? envVars.SA_SKILL_DIRS
         : undefined) ??
+      localConfigFile.skillDirs ??
       configFile.skillDirs ??
       [],
   };
@@ -103,12 +130,14 @@ export const loadContext = async (options: LoadContextOptions = {}): Promise<Con
   const envVars = parseEnvVars(rawEnvVars);
 
   const configFilePath = resolveConfigPath(cliArgs, envVars);
+  const localConfigFilePath = resolveLocalConfigPath(cliArgs, envVars);
 
   // Config file を読み込み
   const configFile = await loadConfig(configFilePath);
+  const localConfigFile = await loadConfig(localConfigFilePath);
 
   // Config をマージ
-  const config = mergeConfig(configFile, envVars, cliArgs);
+  const config = mergeConfig(configFile, localConfigFile, envVars, cliArgs);
 
   // agents と skills を並列で読み込み
   const [agentResults, skillResults] = await Promise.all([

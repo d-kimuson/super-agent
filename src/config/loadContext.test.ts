@@ -14,14 +14,16 @@ describe('loadContext', () => {
     stderrWriteSpy.mockRestore();
   });
 
-  describe('priority order: ConfigFile < EnvVars < CliArgs', () => {
+  describe('priority order: ConfigFile < LocalConfig < EnvVars < CliArgs', () => {
     let tempDir: string;
     let configPath: string;
+    let localConfigPath: string;
 
     beforeEach(() => {
       tempDir = join(process.cwd(), '__temp_context_test__');
       mkdirSync(tempDir, { recursive: true });
       configPath = join(tempDir, 'config.json');
+      localConfigPath = join(tempDir, 'config.local.json');
     });
 
     afterEach(() => {
@@ -78,6 +80,41 @@ describe('loadContext', () => {
 
       expect(context.config.agentsDirs).toEqual(['/env/agents']);
       expect(context.config.skillsDirs).toEqual(['/env/skills']);
+    });
+
+    it('should apply local config between config file and env vars', async () => {
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          agentDirs: ['/config/agents'],
+          skillDirs: ['/config/skills'],
+        }),
+      );
+      writeFileSync(
+        localConfigPath,
+        JSON.stringify({
+          agentDirs: ['/local/agents'],
+          skillDirs: ['/local/skills'],
+        }),
+      );
+
+      const contextFromLocal = await loadContext({
+        cliArgs: { 'ssa-dir': tempDir },
+      });
+
+      expect(contextFromLocal.config.agentsDirs).toEqual(['/local/agents']);
+      expect(contextFromLocal.config.skillsDirs).toEqual(['/local/skills']);
+
+      const contextFromEnv = await loadContext({
+        cliArgs: { 'ssa-dir': tempDir },
+        envVars: {
+          SA_AGENT_DIRS: '/env/agents',
+          SA_SKILL_DIRS: '/env/skills',
+        },
+      });
+
+      expect(contextFromEnv.config.agentsDirs).toEqual(['/env/agents']);
+      expect(contextFromEnv.config.skillsDirs).toEqual(['/env/skills']);
     });
 
     it('should override env vars with cli args', async () => {

@@ -9,13 +9,19 @@ import { configFileSchema } from '../../config/schema';
 import { logger } from '../../lib/logger';
 
 type SetupAnswers = {
-  addClaudeAgents: boolean;
-  addClaudeSkills: boolean;
-  addCodexSkills: boolean;
-  addGithubSkills: boolean;
-  addGeminiSkills: boolean;
-  defaultProvider: 'claude' | 'codex' | 'copilot' | 'gemini';
+  agentDirs: string[];
+  skillDirs: string[];
+  availableProviders: Provider[];
+  defaultProvider: Provider;
   defaultModel: string;
+};
+
+type Provider = 'claude' | 'codex' | 'copilot' | 'gemini';
+type SetupPromptAnswers = Pick<SetupAnswers, 'agentDirs' | 'skillDirs' | 'availableProviders'>;
+
+const formatHomePath = (path: string): string => {
+  const home = homedir();
+  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 };
 
 export const createSetupCommand = () => {
@@ -46,50 +52,69 @@ export const createSetupCommand = () => {
         }
       }
 
+      const agentDirChoices = [
+        { name: formatHomePath(resolve(configDir, 'agents')), value: resolve(configDir, 'agents') },
+        { name: '~/.claude/agents', value: resolve(homedir(), '.claude', 'agents') },
+        { name: '~/.codex/agents', value: resolve(homedir(), '.codex', 'agents') },
+      ];
+      const skillDirChoices = [
+        { name: formatHomePath(resolve(configDir, 'skills')), value: resolve(configDir, 'skills') },
+        { name: '~/.claude/skills', value: resolve(homedir(), '.claude', 'skills') },
+        { name: '~/.codex/skills', value: resolve(homedir(), '.codex', 'skills') },
+        { name: '~/.github/skills', value: resolve(homedir(), '.github', 'skills') },
+        { name: '~/.gemini/skills', value: resolve(homedir(), '.gemini', 'skills') },
+      ];
+
+      const providerChoices: Array<{ name: string; value: Provider }> = [
+        { name: 'Claude', value: 'claude' },
+        { name: 'Codex', value: 'codex' },
+        { name: 'Copilot', value: 'copilot' },
+        { name: 'Gemini', value: 'gemini' },
+      ];
+
       // Collect settings interactively
-      const answers = await inquirer.prompt<Omit<SetupAnswers, 'defaultProvider'>>([
+      const answers = await inquirer.prompt<SetupPromptAnswers>([
         {
-          type: 'confirm',
-          name: 'addClaudeAgents',
-          message: 'Add Claude Code agents directory (~/.claude/agents)?',
-          default: true,
+          type: 'checkbox',
+          name: 'agentDirs',
+          message: '追加するagents dirを選んでください',
+          choices: agentDirChoices,
+          default: agentDirChoices.map((choice) => choice.value),
+          validate: (input: string[]) =>
+            input.length > 0 ? true : '少なくとも1つ選択してください。',
         },
         {
-          type: 'confirm',
-          name: 'addClaudeSkills',
-          message: 'Add Claude skills directory (~/.claude/skills)?',
-          default: true,
+          type: 'checkbox',
+          name: 'skillDirs',
+          message: '追加するskills dirを選んでください',
+          choices: skillDirChoices,
+          default: skillDirChoices.map((choice) => choice.value),
+          validate: (input: string[]) =>
+            input.length > 0 ? true : '少なくとも1つ選択してください。',
         },
         {
-          type: 'confirm',
-          name: 'addCodexSkills',
-          message: 'Add Codex skills directory (~/.codex/skills)?',
-          default: true,
-        },
-        {
-          type: 'confirm',
-          name: 'addGithubSkills',
-          message: 'Add GitHub skills directory (.github/skills)?',
-          default: true,
-        },
-        {
-          type: 'confirm',
-          name: 'addGeminiSkills',
-          message: 'Add Gemini skills directory (.gemini/skills)?',
-          default: true,
+          type: 'checkbox',
+          name: 'availableProviders',
+          message: '利用可能なproviderを選んでください',
+          choices: providerChoices,
+          default: false,
+          validate: (input: Provider[]) =>
+            input.length > 0 ? true : '少なくとも1つ選択してください。',
         },
       ]);
+
+      const availableProviderChoices = providerChoices.filter((choice) =>
+        answers.availableProviders.includes(choice.value),
+      );
+      const defaultProviderChoice =
+        answers.availableProviders.find((provider) => provider === 'claude') ??
+        answers.availableProviders[0];
 
       // Use select for provider choice (radio button style)
       const defaultProvider = await select({
         message: 'Select default provider:',
-        choices: [
-          { name: 'Claude', value: 'claude' },
-          { name: 'Codex', value: 'codex' },
-          { name: 'Copilot', value: 'copilot' },
-          { name: 'Gemini', value: 'gemini' },
-        ],
-        default: 'claude',
+        choices: availableProviderChoices,
+        default: defaultProviderChoice,
       });
 
       // Ask for default model after provider selection
@@ -102,27 +127,6 @@ export const createSetupCommand = () => {
         },
       ]);
 
-      // Build agentDirs
-      const agentDirs: string[] = [resolve(configDir, 'agents')];
-      if (answers.addClaudeAgents) {
-        agentDirs.push(resolve(homedir(), '.claude', 'agents'));
-      }
-
-      // Build skillDirs
-      const skillDirs: string[] = [resolve(configDir, 'skills')];
-      if (answers.addClaudeSkills) {
-        skillDirs.push(resolve(homedir(), '.claude', 'skills'));
-      }
-      if (answers.addCodexSkills) {
-        skillDirs.push(resolve(homedir(), '.codex', 'skills'));
-      }
-      if (answers.addGithubSkills) {
-        skillDirs.push(resolve(homedir(), '.github', 'skills'));
-      }
-      if (answers.addGeminiSkills) {
-        skillDirs.push(resolve(homedir(), '.gemini', 'skills'));
-      }
-
       // Create config file with defaultModel
       const config = configFileSchema.parse({
         defaultModel:
@@ -132,24 +136,29 @@ export const createSetupCommand = () => {
                 model: modelAnswer.defaultModel === '' ? undefined : modelAnswer.defaultModel,
               }
             : undefined,
-        agentDirs,
-        skillDirs,
+        agentDirs: answers.agentDirs,
+        skillDirs: answers.skillDirs,
+        availableProviders: answers.availableProviders,
       });
 
       // Create directory
       await mkdir(configDir, { recursive: true });
 
       // Create agents and skills directories
-      await mkdir(resolve(configDir, 'agents'), { recursive: true });
-      await mkdir(resolve(configDir, 'skills'), { recursive: true });
+      if (answers.agentDirs.includes(resolve(configDir, 'agents'))) {
+        await mkdir(resolve(configDir, 'agents'), { recursive: true });
+      }
+      if (answers.skillDirs.includes(resolve(configDir, 'skills'))) {
+        await mkdir(resolve(configDir, 'skills'), { recursive: true });
+      }
 
       // Write config file
       await writeFile(configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
 
       logger.info(`\n✅ Config file created: ${configPath}`);
-      logger.info(`\n📁 Directories created:`);
-      logger.info(`  - ${resolve(configDir, 'agents')}`);
-      logger.info(`  - ${resolve(configDir, 'skills')}`);
+      logger.info(`\n📁 Directories configured:`);
+      answers.agentDirs.forEach((dir) => logger.info(`  - ${dir}`));
+      answers.skillDirs.forEach((dir) => logger.info(`  - ${dir}`));
 
       if (config.defaultModel !== undefined) {
         logger.info(
@@ -161,6 +170,9 @@ export const createSetupCommand = () => {
         logger.info(`\n💡 To set default model, use environment variable:`);
         logger.info('   export SA_DEFAULT_MODEL="provider:model-name"');
       }
+
+      logger.info('\n📝 Want to keep local tweaks out of version control?');
+      logger.info(`   Use ${resolve(configDir, 'config.local.json')} for overrides.`);
 
       logger.info(`\n🎉 Setup completed!`);
     } catch (error) {
