@@ -157,7 +157,7 @@ export const AgentToolsService = (context: Context) => {
       return {
         success: true,
         sessionId: result.session.sdkSessionId,
-        message: `Task started in background. Session ID: ${result.session.sdkSessionId}`,
+        message: `Task started in background. Resolved Sdk Type: ${result.session.sdkType}. Session ID: ${result.session.sdkSessionId}`,
         sdkType: result.session.sdkType,
       };
     }

@@ -2,5 +2,5 @@ export const errorToString = (error: unknown) => {
   if (error instanceof Error) {
     return error.message;
   }
-  return String(error);
+  return JSON.stringify(error);
 };
