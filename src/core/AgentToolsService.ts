@@ -31,19 +31,6 @@ type ResolveAgentFailure = {
 
 type ResolveAgentResult = ResolveAgentSuccess | ResolveAgentFailure;
 
-type StartSessionSuccess = {
-  ok: true;
-  session: { sdkSessionId: string; sdkType: AgentModel['sdkType'] };
-  stopped: Promise<PausedSession | FailedSession>;
-};
-
-type StartSessionFailure = {
-  ok: false;
-  error: ToolError;
-};
-
-type StartSessionResult = StartSessionSuccess | StartSessionFailure;
-
 export const AgentToolsService = (context: Context) => {
   const { agents, skills, config } = context;
 
@@ -123,12 +110,15 @@ export const AgentToolsService = (context: Context) => {
     };
   };
 
-  const startSession = async (
-    input: z.infer<typeof agentTaskArgsSchema>,
-  ): Promise<StartSessionResult> => {
+  const agentTask = async (input: z.infer<typeof agentTaskArgsSchema>): Promise<ToolResult> => {
     const resolved = resolveAgent(input);
     if (!resolved.ok) {
-      return resolved;
+      return {
+        success: false,
+        code: resolved.error.code,
+        message: resolved.error.message,
+        sessionId: resolved.error.sessionId,
+      };
     }
 
     const sdk = AgentSdk();
@@ -151,99 +141,29 @@ export const AgentToolsService = (context: Context) => {
 
     if (result.code !== 'success') {
       return {
-        ok: false,
-        error: {
-          success: false,
-          code: 'failed-to-start-task',
-          message: `Failed to start task: ${result.code}`,
-        },
-      };
-    }
-
-    return {
-      ok: true,
-      session: {
-        sdkSessionId: result.session.sdkSessionId,
-        sdkType: result.session.sdkType,
-      },
-      stopped: result.stopped,
-    };
-  };
-
-  const agentTask = async (input: z.infer<typeof agentTaskArgsSchema>): Promise<ToolResult> => {
-    const started = await startSession(input);
-    if (!started.ok) {
-      return {
         success: false,
-        code: started.error.code,
-        message: started.error.message,
-        sessionId: started.error.sessionId,
+        code: result.code,
+        message: `Failed to start task: ${result.code}`,
       };
     }
+
+    // timeout した際に agentTaskOutput で取り出せるように runInBackground でなくとも
+    // 追加しておく
+    backgroundTaskMap.set(result.session.sdkSessionId, {
+      promise: result.stopped,
+    });
 
     if (input.runInBackground) {
-      backgroundTaskMap.set(started.session.sdkSessionId, {
-        promise: started.stopped,
-      });
-
       return {
         success: true,
-        sessionId: started.session.sdkSessionId,
-        message: `Task started in background. Session ID: ${started.session.sdkSessionId}`,
-        sdkType: started.session.sdkType,
+        sessionId: result.session.sdkSessionId,
+        message: `Task started in background. Session ID: ${result.session.sdkSessionId}`,
+        sdkType: result.session.sdkType,
       };
     }
 
-    const stopped = await started.stopped;
+    const stopped = await result.stopped;
     return stoppedSessionToResult(stopped);
-  };
-
-  const agentTaskRaw = async (
-    input: z.infer<typeof agentTaskArgsSchema>,
-  ): Promise<AgentTaskRawResult> => {
-    if (input.runInBackground) {
-      return {
-        success: false,
-        code: 'background-not-supported',
-        message: 'agentTaskRaw does not support background execution',
-      };
-    }
-
-    const started = await startSession(input);
-    if (!started.ok) {
-      return {
-        success: false,
-        code: started.error.code,
-        message: started.error.message,
-        sessionId: started.error.sessionId,
-      };
-    }
-
-    const stopped = await started.stopped;
-    const sessionId = stopped.sdkSessionId ?? '';
-    if (stopped.status === 'paused') {
-      if (stopped.currentTurn.status === 'completed') {
-        return {
-          success: true,
-          sessionId,
-          sdkType: stopped.sdkType,
-          output: stopped.currentTurn.output,
-        };
-      }
-      return {
-        success: false,
-        code: 'turn-failed',
-        message: String(stopped.currentTurn.error),
-        sessionId,
-      };
-    }
-
-    return {
-      success: false,
-      code: 'session-failed',
-      message: String(stopped.error),
-      sessionId,
-    };
   };
 
   const agentTaskOutput = async (
@@ -265,7 +185,6 @@ export const AgentToolsService = (context: Context) => {
   return {
     agentTaskArgsSchema,
     agentTask,
-    agentTaskRaw,
     agentTaskOutputSchema,
     agentTaskOutput,
   };

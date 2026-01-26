@@ -287,7 +287,7 @@ export const createToolsCommand = () => {
             runners: {
               agent: async ({ prompt, cwd, agentType }) => {
                 const resolvedAgentType = agentType ?? 'general';
-                const response = await toolsService.agentTaskRaw({
+                const response = await toolsService.agentTask({
                   agentType: resolvedAgentType,
                   prompt,
                   cwd,
@@ -297,7 +297,7 @@ export const createToolsCommand = () => {
                 if (!response.success) {
                   throw new Error(response.message);
                 }
-                return { output: response.output };
+                return { output: response.message };
               },
             },
           },
