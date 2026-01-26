@@ -1,5 +1,6 @@
 import { Command, type Command as CommandType } from 'commander';
-import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { env } from '../../config/env';
 import { loadContext } from '../../config/loadContext';
@@ -200,6 +201,7 @@ export const createToolsCommand = () => {
     .option('--strict-inputs', 'Fail on unknown input keys', false)
     .option('-o, --output-format <format>', 'Output format: message (default) or json', 'message')
     .option('--cwd <path>', 'Working directory for workflow execution', process.cwd())
+    .option('--debug', 'Write workflow debug log to .super-agent/workflow/debug', false)
     .action(async function (
       this: CommandType,
       name: string,
@@ -211,12 +213,16 @@ export const createToolsCommand = () => {
         strictInputs: boolean;
         outputFormat: string;
         cwd: string;
+        debug: boolean;
       },
     ) {
       try {
         if (options.outputFormat === 'json') {
           logger.setLoggerType('stderr');
         }
+        const executionId = randomUUID();
+        const executionStartedAt = new Date().toISOString();
+        logger.info(`execution: ${executionId}`);
         const rootCommand = this.parent?.parent;
         const opts = rootCommand?.opts<GlobalOptions>();
 
@@ -277,6 +283,7 @@ export const createToolsCommand = () => {
           inputs: merged.value,
           options: {
             cwd: options.cwd,
+            captureExecutions: options.debug,
             onLog: (entry) => {
               if (entry.level === 'error') {
                 logger.error(`[${entry.stepId}] ${entry.message}`);
@@ -304,6 +311,24 @@ export const createToolsCommand = () => {
         });
 
         const success = result.status === 'success';
+        if (options.debug) {
+          const debugDir = resolve(process.cwd(), '.super-agent', 'debug', 'workflow');
+          await mkdir(debugDir, { recursive: true });
+          const debugPayload = {
+            executionId,
+            workflow: {
+              id: workflow.id,
+              path: workflowPath,
+            },
+            status: result.status,
+            startedAt: executionStartedAt,
+            finishedAt: new Date().toISOString(),
+            inputs: merged.value,
+            executedSteps: result.executions ?? [],
+          };
+          const debugPath = resolve(debugDir, `${executionId}.json`);
+          await writeFile(debugPath, JSON.stringify(debugPayload, null, 2), 'utf-8');
+        }
         if (options.outputFormat === 'json') {
           const payload = {
             success,

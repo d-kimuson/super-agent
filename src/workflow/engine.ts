@@ -12,6 +12,7 @@ import {
   type WorkflowRunResult,
   type StepLog,
   type StepRunners,
+  type StepExecutionRecord,
 } from './types';
 
 const defaultClock = {
@@ -239,6 +240,8 @@ export const runWorkflow = async ({
 
   const resolved = resolveInputs(workflow, inputs);
   const logs: StepLog[] = [];
+  const executions: StepExecutionRecord[] = [];
+
   if (!resolved.ok) {
     return {
       status: 'failed',
@@ -246,6 +249,7 @@ export const runWorkflow = async ({
       logs: [
         { time: isoTime(clock.now()), stepId: 'workflow', level: 'error', message: resolved.error },
       ],
+      executions,
     };
   }
 
@@ -256,6 +260,30 @@ export const runWorkflow = async ({
     const entry = { time: isoTime(clock.now()), stepId, level, message };
     logs.push(entry);
     options?.onLog?.(entry);
+  };
+
+  const startExecutionRecord = (record: StepExecutionRecord) => {
+    executions.push(record);
+    return record;
+  };
+
+  const finishExecutionRecord = (
+    record: StepExecutionRecord | undefined,
+    update: {
+      output?: Record<string, unknown> | null;
+      status: 'success' | 'failed';
+      error?: string;
+    },
+  ) => {
+    if (!record) {
+      return;
+    }
+    record.output = update.output ?? null;
+    record.status = update.status;
+    record.finishedAt = isoTime(clock.now());
+    if (update.error !== undefined) {
+      record.error = update.error;
+    }
   };
 
   const getResult = (stepId: string): StepResult => {
@@ -289,107 +317,6 @@ export const runWorkflow = async ({
     }
   };
 
-  const executeShell = async (
-    step: ExecuteStep,
-    attempt: number,
-  ): Promise<
-    { ok: true; result: Awaited<ReturnType<StepRunners['shell']>> } | { ok: false; error: string }
-  > => {
-    const execute = step.execute;
-    if (execute.type !== 'shell') {
-      return { ok: false, error: 'invalid shell step' };
-    }
-    const template = renderStringTemplate(execute.run, resolved.inputs, results);
-    if (!template.ok) {
-      return { ok: false, error: template.error };
-    }
-    const timeoutMs = step.timeoutSeconds !== undefined ? step.timeoutSeconds * 1000 : undefined;
-    const result = await runners.shell({
-      stepId: step.id,
-      attempt,
-      run: template.value,
-      timeoutMs,
-      cwd: options?.cwd ?? process.cwd(),
-    });
-    return { ok: true, result };
-  };
-
-  const executeAgent = async (
-    step: ExecuteStep,
-    attempt: number,
-  ): Promise<
-    | { ok: true; result: Awaited<ReturnType<StepRunners['agent']>> }
-    | { ok: false; error: string; timedOut?: true }
-  > => {
-    const execute = step.execute;
-    if (execute.type !== 'agent') {
-      return { ok: false, error: 'invalid agent step' };
-    }
-    const template = renderStringTemplate(execute.prompt, resolved.inputs, results);
-    if (!template.ok) {
-      return { ok: false, error: template.error };
-    }
-    const timeoutMs = step.timeoutSeconds !== undefined ? step.timeoutSeconds * 1000 : undefined;
-    try {
-      const result = await withTimeout(
-        runners.agent({
-          stepId: step.id,
-          attempt,
-          sdkType: execute.sdkType,
-          model: execute.model,
-          prompt: template.value,
-          agentType: execute.agentType,
-          timeoutMs,
-          cwd: options?.cwd ?? process.cwd(),
-        }),
-        timeoutMs,
-      );
-      if (!result.ok) {
-        return { ok: false, error: 'timeout', timedOut: true };
-      }
-      return { ok: true, result: result.value };
-    } catch (error) {
-      return { ok: false, error: String(error) };
-    }
-  };
-
-  const executeSlack = async (
-    step: ExecuteStep,
-    attempt: number,
-  ): Promise<
-    | { ok: true; result: Awaited<ReturnType<StepRunners['slack']>> }
-    | { ok: false; error: string; timedOut?: true }
-  > => {
-    const execute = step.execute;
-    if (execute.type !== 'slack') {
-      return { ok: false, error: 'invalid slack step' };
-    }
-    const template = renderStringTemplate(execute.message.text, resolved.inputs, results);
-    if (!template.ok) {
-      return { ok: false, error: template.error };
-    }
-    const timeoutMs = step.timeoutSeconds !== undefined ? step.timeoutSeconds * 1000 : undefined;
-    try {
-      const result = await withTimeout(
-        runners.slack({
-          stepId: step.id,
-          attempt,
-          channel: execute.channel,
-          text: template.value,
-          timeoutMs,
-          cwd: options?.cwd ?? process.cwd(),
-        }),
-        timeoutMs,
-      );
-      if (!result.ok) {
-        return { ok: false, error: 'timeout', timedOut: true };
-      }
-      return { ok: true, result: result.value };
-    } catch (error) {
-      return { ok: false, error: String(error) };
-    }
-  };
-
   const finalizeStepFailure = (step: StepDefinition, error: string): { status: StepStatus } => {
     const onError = step.onError ?? 'fail';
     if (onError === 'skip') {
@@ -417,42 +344,131 @@ export const runWorkflow = async ({
       log(step.id, 'info', `attempt ${attempt} start`);
 
       if (step.execute.type === 'shell') {
-        const exec = await executeShell(step, attempt);
-        if (!exec.ok) {
+        const template = renderStringTemplate(step.execute.run, resolved.inputs, results);
+        if (!template.ok) {
           if (attempt <= retryDef.max) {
             await applyRetryDelay(attempt, retryDef);
             continue;
           }
-          return finalizeStepFailure(step, exec.error);
+          return finalizeStepFailure(step, template.error);
         }
-        const { stdout, stderr, exitCode, timedOut } = exec.result;
-        getResult(step.id).outputs = { stdout, stderr, exitCode };
-        if (timedOut === true || exitCode !== 0) {
-          const message = timedOut === true ? 'timeout' : `exitCode=${exitCode}`;
+        const timeoutMs =
+          step.timeoutSeconds !== undefined ? step.timeoutSeconds * 1000 : undefined;
+        const record = startExecutionRecord({
+          stepId: step.id,
+          attempt,
+          type: 'shell',
+          input: {
+            run: template.value,
+            cwd: options?.cwd ?? process.cwd(),
+            timeoutMs,
+          },
+          status: 'success',
+          startedAt: isoTime(clock.now()),
+          finishedAt: isoTime(clock.now()),
+        });
+        try {
+          const { stdout, stderr, exitCode, timedOut } = await runners.shell({
+            stepId: step.id,
+            attempt,
+            run: template.value,
+            timeoutMs,
+            cwd: options?.cwd ?? process.cwd(),
+          });
+          getResult(step.id).outputs = { stdout, stderr, exitCode };
+          const output = { stdout, stderr, exitCode, timedOut };
+          if (timedOut === true || exitCode !== 0) {
+            const message = timedOut === true ? 'timeout' : `exitCode=${exitCode}`;
+            finishExecutionRecord(record, { status: 'failed', output, error: message });
+            if (attempt <= retryDef.max) {
+              await applyRetryDelay(attempt, retryDef);
+              continue;
+            }
+            return finalizeStepFailure(step, message);
+          }
+          finishExecutionRecord(record, { status: 'success', output });
+          setStatus(step.id, 'success');
+          if (stdout.length > 0) {
+            log(step.id, 'info', `stdout: ${summarizeOutput(stdout, 200)}`);
+          }
+          log(step.id, 'info', 'success');
+          return { status: 'success' };
+        } catch (error) {
+          const message = String(error);
+          finishExecutionRecord(record, { status: 'failed', error: message });
           if (attempt <= retryDef.max) {
             await applyRetryDelay(attempt, retryDef);
             continue;
           }
           return finalizeStepFailure(step, message);
         }
-        setStatus(step.id, 'success');
-        if (stdout.length > 0) {
-          log(step.id, 'info', `stdout: ${summarizeOutput(stdout, 200)}`);
-        }
-        log(step.id, 'info', 'success');
-        return { status: 'success' };
       }
 
       if (step.execute.type === 'agent') {
-        const exec = await executeAgent(step, attempt);
-        if (!exec.ok) {
+        const template = renderStringTemplate(step.execute.prompt, resolved.inputs, results);
+        if (!template.ok) {
           if (attempt <= retryDef.max) {
             await applyRetryDelay(attempt, retryDef);
             continue;
           }
-          return finalizeStepFailure(step, exec.error);
+          return finalizeStepFailure(step, template.error);
         }
-        const { output, timedOut } = exec.result;
+        const timeoutMs =
+          step.timeoutSeconds !== undefined ? step.timeoutSeconds * 1000 : undefined;
+        const record = startExecutionRecord({
+          stepId: step.id,
+          attempt,
+          type: 'agent',
+          input: {
+            sdkType: step.execute.sdkType,
+            model: step.execute.model,
+            prompt: template.value,
+            agentType: step.execute.agentType ?? null,
+            cwd: options?.cwd ?? process.cwd(),
+            timeoutMs,
+          },
+          status: 'success',
+          startedAt: isoTime(clock.now()),
+          finishedAt: isoTime(clock.now()),
+        });
+        let execResult:
+          | { ok: true; value: Awaited<ReturnType<StepRunners['agent']>> }
+          | { ok: false; error: string; timedOut?: true };
+        try {
+          const result = await withTimeout(
+            runners.agent({
+              stepId: step.id,
+              attempt,
+              sdkType: step.execute.sdkType,
+              model: step.execute.model,
+              prompt: template.value,
+              agentType: step.execute.agentType,
+              timeoutMs,
+              cwd: options?.cwd ?? process.cwd(),
+            }),
+            timeoutMs,
+          );
+          if (!result.ok) {
+            execResult = { ok: false, error: 'timeout', timedOut: true };
+          } else {
+            execResult = { ok: true, value: result.value };
+          }
+        } catch (error) {
+          execResult = { ok: false, error: String(error) };
+        }
+        if (!execResult.ok) {
+          finishExecutionRecord(record, {
+            status: 'failed',
+            output: execResult.timedOut ? { timedOut: true } : null,
+            error: execResult.error,
+          });
+          if (attempt <= retryDef.max) {
+            await applyRetryDelay(attempt, retryDef);
+            continue;
+          }
+          return finalizeStepFailure(step, execResult.error);
+        }
+        const { output, timedOut } = execResult.value;
         const outputs: StepOutputs = { output };
         if (step.execute.structured !== undefined) {
           try {
@@ -467,9 +483,19 @@ export const runWorkflow = async ({
             outputs.structured = record;
           } catch (error) {
             if (attempt <= retryDef.max) {
+              finishExecutionRecord(record, {
+                status: 'failed',
+                output: { output, timedOut },
+                error: `structured parse failed: ${String(error)}`,
+              });
               await applyRetryDelay(attempt, retryDef);
               continue;
             }
+            finishExecutionRecord(record, {
+              status: 'failed',
+              output: { output, timedOut },
+              error: `structured parse failed: ${String(error)}`,
+            });
             return finalizeStepFailure(step, `structured parse failed: ${String(error)}`);
           }
         } else {
@@ -477,12 +503,18 @@ export const runWorkflow = async ({
         }
         getResult(step.id).outputs = outputs;
         if (timedOut === true) {
+          finishExecutionRecord(record, {
+            status: 'failed',
+            output: { output, timedOut },
+            error: 'timeout',
+          });
           if (attempt <= retryDef.max) {
             await applyRetryDelay(attempt, retryDef);
             continue;
           }
           return finalizeStepFailure(step, 'timeout');
         }
+        finishExecutionRecord(record, { status: 'success', output: { output, timedOut } });
         setStatus(step.id, 'success');
         if (output.length > 0) {
           log(step.id, 'info', `output: ${summarizeOutput(output, 200)}`);
@@ -492,23 +524,80 @@ export const runWorkflow = async ({
       }
 
       if (step.execute.type === 'slack') {
-        const exec = await executeSlack(step, attempt);
-        if (!exec.ok) {
+        const template = renderStringTemplate(step.execute.message.text, resolved.inputs, results);
+        if (!template.ok) {
           if (attempt <= retryDef.max) {
             await applyRetryDelay(attempt, retryDef);
             continue;
           }
-          return finalizeStepFailure(step, exec.error);
+          return finalizeStepFailure(step, template.error);
         }
-        const { output, timedOut } = exec.result;
+        const timeoutMs =
+          step.timeoutSeconds !== undefined ? step.timeoutSeconds * 1000 : undefined;
+        const record = startExecutionRecord({
+          stepId: step.id,
+          attempt,
+          type: 'slack',
+          input: {
+            channel: step.execute.channel,
+            text: template.value,
+            cwd: options?.cwd ?? process.cwd(),
+            timeoutMs,
+          },
+          status: 'success',
+          startedAt: isoTime(clock.now()),
+          finishedAt: isoTime(clock.now()),
+        });
+        let execResult:
+          | { ok: true; value: Awaited<ReturnType<StepRunners['slack']>> }
+          | { ok: false; error: string; timedOut?: true };
+        try {
+          const result = await withTimeout(
+            runners.slack({
+              stepId: step.id,
+              attempt,
+              channel: step.execute.channel,
+              text: template.value,
+              timeoutMs,
+              cwd: options?.cwd ?? process.cwd(),
+            }),
+            timeoutMs,
+          );
+          if (!result.ok) {
+            execResult = { ok: false, error: 'timeout', timedOut: true };
+          } else {
+            execResult = { ok: true, value: result.value };
+          }
+        } catch (error) {
+          execResult = { ok: false, error: String(error) };
+        }
+        if (!execResult.ok) {
+          finishExecutionRecord(record, {
+            status: 'failed',
+            output: execResult.timedOut ? { timedOut: true } : null,
+            error: execResult.error,
+          });
+          if (attempt <= retryDef.max) {
+            await applyRetryDelay(attempt, retryDef);
+            continue;
+          }
+          return finalizeStepFailure(step, execResult.error);
+        }
+        const { output, timedOut } = execResult.value;
         getResult(step.id).outputs = { output };
         if (timedOut === true) {
+          finishExecutionRecord(record, {
+            status: 'failed',
+            output: { output, timedOut },
+            error: 'timeout',
+          });
           if (attempt <= retryDef.max) {
             await applyRetryDelay(attempt, retryDef);
             continue;
           }
           return finalizeStepFailure(step, 'timeout');
         }
+        finishExecutionRecord(record, { status: 'success', output: { output, timedOut } });
         setStatus(step.id, 'success');
         if (output.length > 0) {
           log(step.id, 'info', `output: ${summarizeOutput(output, 200)}`);
@@ -541,17 +630,38 @@ export const runWorkflow = async ({
         return finalizeStepFailure(step, 'repeat block is invalid');
       }
       setStatus(step.id, 'running');
+      const repeatRecord = startExecutionRecord({
+        stepId: step.id,
+        attempt: 1,
+        type: 'repeat',
+        input: { max: repeat.max, until: repeat.until ?? null },
+        status: 'success',
+        startedAt: isoTime(clock.now()),
+        finishedAt: isoTime(clock.now()),
+      });
+      let iterations = 0;
       for (let iteration = 1; iteration <= repeat.max; iteration += 1) {
+        iterations = iteration;
         for (const child of childSteps) {
           resetStep(getResult(child.id));
         }
         const result = await executeStepList(childSteps);
         if (result.status === 'failed') {
+          finishExecutionRecord(repeatRecord, {
+            status: 'failed',
+            output: { iterations },
+            error: 'child step failed',
+          });
           return { status: 'failed' };
         }
         if (repeat.until !== undefined) {
           const condition = renderIfExpression(repeat.until, resolved.inputs, results);
           if (!condition.ok) {
+            finishExecutionRecord(repeatRecord, {
+              status: 'failed',
+              output: { iterations },
+              error: condition.error,
+            });
             return finalizeStepFailure(step, condition.error);
           }
           if (condition.value === true) {
@@ -559,6 +669,7 @@ export const runWorkflow = async ({
           }
         }
       }
+      finishExecutionRecord(repeatRecord, { status: 'success', output: { iterations } });
       setStatus(step.id, 'success');
       return { status: 'success' };
     }
@@ -628,5 +739,10 @@ export const runWorkflow = async ({
   };
 
   const outcome = await executeStepList(workflow.steps);
-  return { status: outcome.status === 'failed' ? 'failed' : 'success', steps: results, logs };
+  return {
+    status: outcome.status === 'failed' ? 'failed' : 'success',
+    steps: results,
+    logs,
+    executions,
+  };
 };

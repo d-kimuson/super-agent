@@ -142,3 +142,6 @@ vite.config.ts.timestamp-*
 
 # Build output
 dist/
+
+# super-agent
+.super-agent/debug

@@ -105,6 +105,7 @@ export type WorkflowRunResult = {
   status: 'success' | 'failed';
   steps: Record<string, StepResult>;
   logs: StepLog[];
+  executions?: StepExecutionRecord[];
 };
 
 export type StepExecutionContext = {
@@ -150,4 +151,17 @@ export type WorkflowEngineOptions = {
   };
   cwd?: string;
   onLog?: (log: StepLog) => void;
+  captureExecutions?: boolean;
+};
+
+export type StepExecutionRecord = {
+  stepId: string;
+  attempt: number;
+  type: ExecuteDef['type'] | 'repeat';
+  input: Record<string, unknown>;
+  output?: Record<string, unknown> | null;
+  status: 'success' | 'failed';
+  startedAt: string;
+  finishedAt: string;
+  error?: string;
 };

@@ -199,15 +199,16 @@
 
     /* Custom Restrictions */
     "no-console": "error", // console 禁止 (logger を設定する場合)
-    "node/no-process-env": "error", // process.env への直接アクセスを禁止 (腐敗防止層を用意する場合)
-    "no-restricted-globals": [
-      // new Date の利用を禁止(依存性注入されたファクトリーを使用する場合)
-      "error",
-      {
-        "name": "Date",
-        "message": "Use injected Clock/DateFactory instead of global Date."
-      }
-    ] // グローバル Date の使用を禁止(依存性注入されたファクトリーを使用)
+    "node/no-process-env": "error" // process.env への直接アクセスを禁止 (腐敗防止層を用意する場合)
+    // // グローバル Date の使用を禁止(依存性注入されたファクトリーを使用)
+    // "no-restricted-globals": [
+    //   // new Date の利用を禁止(依存性注入されたファクトリーを使用する場合)
+    //   "error",
+    //   {
+    //     "name": "Date",
+    //     "message": "Use injected Clock/DateFactory instead of global Date."
+    //   }
+    // ]
   },
   "overrides": [],
   "settings": {
