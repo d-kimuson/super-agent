@@ -19,6 +19,7 @@ type TokenType =
   | 'null'
   | 'operator'
   | 'paren'
+  | 'comma'
   | 'dot'
   | 'eof';
 
@@ -31,6 +32,7 @@ type Token = {
 type AstNode =
   | { type: 'literal'; value: unknown }
   | { type: 'path'; path: string[] }
+  | { type: 'functionCall'; name: string; args: AstNode[] }
   | { type: 'unary'; operator: '!'; expr: AstNode }
   | {
       type: 'binary';
@@ -67,6 +69,12 @@ const tokenize = (source: string): TokenizeResult => {
 
     if (char === '!' || char === '(' || char === ')') {
       tokens.push({ type: char === '!' ? 'operator' : 'paren', value: char, position });
+      i += 1;
+      continue;
+    }
+
+    if (char === ',') {
+      tokens.push({ type: 'comma', value: ',', position });
       i += 1;
       continue;
     }
@@ -224,9 +232,35 @@ const parse = (source: string): AstResult => {
     }
 
     if (token.type === 'identifier') {
-      const path: string[] = [];
       const first = consume();
-      path.push(first.value ?? '');
+      const identifier = first.value ?? '';
+
+      if (peek().type === 'paren' && peek().value === '(') {
+        consume();
+        const args: AstNode[] = [];
+        if (!(peek().type === 'paren' && peek().value === ')')) {
+          const firstArg = parseExpression();
+          if (!firstArg.ok) {
+            return firstArg;
+          }
+          args.push(firstArg.ast);
+          while (peek().type === 'comma') {
+            consume();
+            const arg = parseExpression();
+            if (!arg.ok) {
+              return arg;
+            }
+            args.push(arg.ast);
+          }
+        }
+        const closing = expect('paren', ')');
+        if (!closing) {
+          return fail('Expected closing paren', first.position);
+        }
+        return { ok: true, ast: { type: 'functionCall', name: identifier, args } };
+      }
+
+      const path: string[] = [identifier];
       while (peek().type === 'dot') {
         consume();
         const next = peek();
@@ -403,6 +437,67 @@ const evaluateAst = (node: AstNode, context: ExpressionContext): ExpressionResul
       return { ok: true, value: node.value };
     case 'path':
       return evaluatePath(node.path, context);
+    case 'functionCall': {
+      if (node.name !== 'trim' && node.name !== 'trimEnd' && node.name !== 'stripNewline') {
+        return {
+          ok: false,
+          error: {
+            code: 'unknown-identifier',
+            message: `Unknown function: ${node.name}`,
+          },
+        };
+      }
+
+      if (node.args.length !== 1) {
+        return {
+          ok: false,
+          error: {
+            code: 'unsupported-syntax',
+            message: `Function ${node.name}() requires 1 argument`,
+          },
+        };
+      }
+
+      const argNode = node.args[0];
+      if (argNode === undefined) {
+        return {
+          ok: false,
+          error: {
+            code: 'unsupported-syntax',
+            message: `Function ${node.name}() requires 1 argument`,
+          },
+        };
+      }
+
+      const arg = evaluateAst(argNode, context);
+      if (!arg.ok) {
+        return arg;
+      }
+      if (typeof arg.value !== 'string') {
+        return {
+          ok: false,
+          error: {
+            code: 'unsupported-syntax',
+            message: `Function ${node.name}() requires a string argument`,
+          },
+        };
+      }
+
+      if (node.name === 'trim') {
+        return { ok: true, value: arg.value.trim() };
+      }
+      if (node.name === 'trimEnd') {
+        return { ok: true, value: arg.value.trimEnd() };
+      }
+
+      if (arg.value.endsWith('\r\n')) {
+        return { ok: true, value: arg.value.slice(0, -2) };
+      }
+      if (arg.value.endsWith('\n')) {
+        return { ok: true, value: arg.value.slice(0, -1) };
+      }
+      return { ok: true, value: arg.value };
+    }
     case 'unary': {
       const result = evaluateAst(node.expr, context);
       if (!result.ok) {

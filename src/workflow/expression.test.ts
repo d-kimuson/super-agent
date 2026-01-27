@@ -84,3 +84,113 @@ describe('evaluateExpression', () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe('evaluateExpression - function calls', () => {
+  const contextWithStdout = {
+    inputs: {},
+    steps: {
+      counter: { stdout: '3\n' },
+      padded: { stdout: '  hello  \n' },
+      crlf: { stdout: 'value\r\n' },
+      clean: { stdout: 'notrail' },
+    },
+  };
+
+  it('evaluates trimEnd()', () => {
+    const result = evaluateExpression({
+      expression: 'trimEnd(steps.counter.stdout) == "3"',
+      context: contextWithStdout,
+    });
+    expect(result.ok).toBe(true);
+    expect(getValue(result)).toBe(true);
+  });
+
+  it('evaluates trim()', () => {
+    const result = evaluateExpression({
+      expression: 'trim(steps.padded.stdout) == "hello"',
+      context: contextWithStdout,
+    });
+    expect(result.ok).toBe(true);
+    expect(getValue(result)).toBe(true);
+  });
+
+  it('evaluates trimEnd() without trimming left', () => {
+    const result = evaluateExpression({
+      expression: 'trimEnd(steps.padded.stdout) == "  hello"',
+      context: contextWithStdout,
+    });
+    expect(result.ok).toBe(true);
+    expect(getValue(result)).toBe(true);
+  });
+
+  it('evaluates stripNewline()', () => {
+    expect(
+      getValue(
+        evaluateExpression({
+          expression: 'stripNewline(steps.counter.stdout) == "3"',
+          context: contextWithStdout,
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      getValue(
+        evaluateExpression({
+          expression: 'stripNewline(steps.crlf.stdout) == "value"',
+          context: contextWithStdout,
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      getValue(
+        evaluateExpression({
+          expression: 'stripNewline(steps.clean.stdout) == "notrail"',
+          context: contextWithStdout,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('supports string literal argument', () => {
+    const result = evaluateExpression({
+      expression: 'trim(" 3\n ") == "3"',
+      context: contextWithStdout,
+    });
+    expect(result.ok).toBe(true);
+    expect(getValue(result)).toBe(true);
+  });
+
+  it('errors on unknown function', () => {
+    const result = evaluateExpression({
+      expression: 'unknown(steps.counter.stdout)',
+      context: contextWithStdout,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('unknown-identifier');
+      expect(result.error.message).toBe('Unknown function: unknown');
+    }
+  });
+
+  it('errors when function arg is not a string', () => {
+    const result = evaluateExpression({
+      expression: 'trim(123)',
+      context: contextWithStdout,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('unsupported-syntax');
+      expect(result.error.message).toBe('Function trim() requires a string argument');
+    }
+  });
+
+  it('supports function calls in conditions', () => {
+    const result = evaluateCondition({
+      expression: 'trimEnd(steps.counter.stdout) == "3"',
+      context: contextWithStdout,
+    });
+    expect(result.ok).toBe(true);
+    expect(getValue(result)).toBe(true);
+  });
+});

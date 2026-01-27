@@ -177,6 +177,15 @@ if や ${{ }} は同じ評価器。
 - 括弧 ()
 - dotted access: steps.review.structured.approved
 - オプショナル: a || b でフォールバック（例: titleがないとき output を使う）
+- 関数呼び出し: functionName(expr)
+
+組み込み関数：
+
+- trim(value): 両端の空白・改行を除去（String.prototype.trim 相当）
+- trimEnd(value): 末尾の空白・改行を除去（String.prototype.trimEnd 相当）
+- stripNewline(value): 末尾の改行（\n または \r\n）を1回だけ除去
+
+例: `trimEnd(steps.counter.stdout) == "3"` — echo 3 の stdout "3\n" を比較可能にする
 
 テンプレート展開：
 
