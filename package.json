@@ -1,6 +1,6 @@
 {
   "name": "@kimuson/super-agent",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.1",
   "description": "Unified orchestration layer for AI agent SDKs with intelligent fallback and sub-agent patterns",
   "homepage": "https://github.com/d-kimuson/super-agent",
   "license": "MIT",
@@ -19,6 +19,10 @@
     "./cli": {
       "require": "./dist/cli/index.cjs",
       "import": "./dist/cli/index.mjs"
+    },
+    "./sdk": {
+      "require": "./dist/sdk.cjs",
+      "import": "./dist/sdk.mjs"
     },
     "./package.json": "./package.json"
   },
