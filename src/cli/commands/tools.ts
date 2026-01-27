@@ -1,7 +1,8 @@
 import { Command, type Command as CommandType } from 'commander';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { ZodError } from 'zod';
 import { env } from '../../config/env';
 import { loadContext } from '../../config/loadContext';
 import { cliArgsSchema, providersSchema } from '../../config/schema';
@@ -185,6 +186,52 @@ export const createToolsCommand = () => {
     }
     return [...previous, value];
   };
+
+  toolsCommand
+    .command('workflow-validate')
+    .description('Validate all workflow YAML files in a directory')
+    .option(
+      '--workflow-dir <path>',
+      'Workflow directory (default: ./example-config/workflows)',
+      './example-config/workflows',
+    )
+    .action(async (options: { workflowDir: string }) => {
+      try {
+        const dir = resolve(options.workflowDir);
+        const entries = await readdir(dir);
+        const yamlFiles = entries.filter((f) => f.endsWith('.yaml') ?? f.endsWith('.yml'));
+
+        if (yamlFiles.length === 0) {
+          logger.warn(`No workflow files found in ${dir}`);
+          process.exit(0);
+        }
+
+        let hasError = false;
+        for (const file of yamlFiles) {
+          const filePath = resolve(dir, file);
+          const yamlText = await readFile(filePath, 'utf-8');
+          try {
+            loadWorkflowFromYaml(yamlText);
+            logger.info(`✓ ${file}`);
+          } catch (error) {
+            hasError = true;
+            if (error instanceof ZodError) {
+              logger.error(`✗ ${file}`);
+              for (const issue of error.issues) {
+                logger.error(`  ${issue.path.join('.')}: ${issue.message}`);
+              }
+            } else {
+              logger.error(`✗ ${file}: ${String(error)}`);
+            }
+          }
+        }
+
+        process.exit(hasError ? 1 : 0);
+      } catch (error) {
+        logger.error('Failed to validate workflows:', error);
+        process.exit(2);
+      }
+    });
 
   toolsCommand
     .command('workflow-run')
