@@ -55,7 +55,6 @@ export const createSetupCommand = () => {
       const agentDirChoices = [
         { name: formatHomePath(resolve(configDir, 'agents')), value: resolve(configDir, 'agents') },
         { name: '~/.claude/agents', value: resolve(homedir(), '.claude', 'agents') },
-        { name: '~/.codex/agents', value: resolve(homedir(), '.codex', 'agents') },
       ];
       const skillDirChoices = [
         { name: formatHomePath(resolve(configDir, 'skills')), value: resolve(configDir, 'skills') },
@@ -159,17 +158,6 @@ export const createSetupCommand = () => {
       logger.info(`\n📁 Directories configured:`);
       answers.agentDirs.forEach((dir) => logger.info(`  - ${dir}`));
       answers.skillDirs.forEach((dir) => logger.info(`  - ${dir}`));
-
-      if (config.defaultModel !== undefined) {
-        logger.info(
-          `\n💡 Default model set to: ${config.defaultModel.sdkType}${config.defaultModel.model !== '' ? `:${config.defaultModel.model}` : ''}`,
-        );
-        logger.info('   To override, use environment variable:');
-        logger.info('   export SA_DEFAULT_MODEL="provider:model-name"');
-      } else {
-        logger.info(`\n💡 To set default model, use environment variable:`);
-        logger.info('   export SA_DEFAULT_MODEL="provider:model-name"');
-      }
 
       logger.info('\n📝 Want to keep local tweaks out of version control?');
       logger.info(`   Use ${resolve(configDir, 'config.local.json')} for overrides.`);
