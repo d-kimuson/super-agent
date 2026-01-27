@@ -15,10 +15,6 @@
       "require": "./dist/cli/index.cjs",
       "import": "./dist/cli/index.mjs"
     },
-    "./sdk": {
-      "require": "./dist/sdk.cjs",
-      "import": "./dist/sdk.mjs"
-    },
     "./package.json": "./package.json"
   },
   "scripts": {
