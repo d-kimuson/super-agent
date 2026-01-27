@@ -1,8 +1,8 @@
 import { parse } from 'yaml';
 import { providersSchema } from '../config/schema';
 import {
-  type ExecuteDef,
   type InputDef,
+  type NonLoopExecute,
   type OnError,
   type RetryStrategy,
   type StepBase,
@@ -199,7 +199,7 @@ const parseOnError = ({
   return undefined;
 };
 
-const validateExecute = (value: unknown, path: string): ExecuteDef => {
+const validateNonLoopExecute = (value: unknown, path: string): NonLoopExecute => {
   const obj = assertObject(value, path);
   const type = assertString(obj['type'], `${path}.type`);
   if (type === 'shell') {
@@ -277,6 +277,7 @@ const validateStep = (value: unknown, path: string): StepDefinition => {
 
   const hasExecute = obj['execute'] !== undefined;
   const hasRepeat = obj['repeat'] !== undefined;
+  const hasTopLevelSteps = obj['steps'] !== undefined;
 
   if (hasExecute && hasRepeat) {
     throw new Error(`${path} cannot have both execute and repeat`);
@@ -285,31 +286,93 @@ const validateStep = (value: unknown, path: string): StepDefinition => {
     throw new Error(`${path} must have either execute or repeat`);
   }
 
-  if (hasExecute) {
+  if (hasRepeat) {
+    const repeatObj = assertObject(obj['repeat'], `${path}.repeat`);
+    const max = repeatObj['max'];
+    if (typeof max !== 'number' || !Number.isFinite(max)) {
+      throw new Error(`${path}.repeat.max must be a number`);
+    }
+    if (!Number.isInteger(max)) {
+      throw new Error(`${path}.repeat.max must be an integer`);
+    }
+    if (max < 1) {
+      throw new Error(`${path}.repeat.max must be >= 1`);
+    }
+
+    const hasRepeatSteps = repeatObj['steps'] !== undefined;
+    if (hasRepeatSteps && hasTopLevelSteps) {
+      throw new Error(`${path} cannot have both ${path}.repeat.steps and ${path}.steps`);
+    }
+
+    const stepsValue = hasRepeatSteps ? repeatObj['steps'] : obj['steps'];
+    const stepsPath = hasRepeatSteps ? `${path}.repeat.steps` : `${path}.steps`;
+    if (stepsValue === undefined) {
+      throw new Error(
+        `${path}.repeat.steps (or ${path}.steps) is required when using ${path}.repeat`,
+      );
+    }
+    const steps = assertArray(stepsValue, stepsPath).map((child, index) =>
+      validateStep(child, `${stepsPath}[${index}]`),
+    );
     return {
       ...stepBase,
-      execute: validateExecute(obj['execute'], `${path}.execute`),
+      execute: {
+        type: 'loop',
+        max,
+        until:
+          repeatObj['until'] !== undefined
+            ? assertString(repeatObj['until'], `${path}.repeat.until`)
+            : undefined,
+        steps,
+      },
     };
   }
 
-  const repeatObj = assertObject(obj['repeat'], `${path}.repeat`);
-  const max = repeatObj['max'];
-  if (typeof max !== 'number') {
-    throw new Error(`${path}.repeat.max must be a number`);
+  if (hasTopLevelSteps) {
+    throw new Error(`${path}.steps is not allowed; use ${path}.execute.steps for loop blocks`);
   }
-  const steps = assertArray(obj['steps'], `${path}.steps`).map((child, index) =>
-    validateStep(child, `${path}.steps[${index}]`),
-  );
+
+  const executeObj = assertObject(obj['execute'], `${path}.execute`);
+  const executeType = assertString(executeObj['type'], `${path}.execute.type`);
+  if (executeType === 'loop') {
+    const max = executeObj['max'];
+    if (typeof max !== 'number' || !Number.isFinite(max)) {
+      throw new Error(`${path}.execute.max must be a number`);
+    }
+    if (!Number.isInteger(max)) {
+      throw new Error(`${path}.execute.max must be an integer`);
+    }
+    if (max < 1) {
+      throw new Error(`${path}.execute.max must be >= 1`);
+    }
+    const untilRaw = executeObj['until'];
+    if (untilRaw !== undefined && typeof untilRaw !== 'string') {
+      throw new Error(`${path}.execute.until must be a string`);
+    }
+    if (executeObj['steps'] === undefined) {
+      throw new Error(`${path}.execute.steps is required when ${path}.execute.type is loop`);
+    }
+    const steps = assertArray(executeObj['steps'], `${path}.execute.steps`).map((child, index) =>
+      validateStep(child, `${path}.execute.steps[${index}]`),
+    );
+    return {
+      ...stepBase,
+      execute: {
+        type: 'loop',
+        max,
+        until: untilRaw,
+        steps,
+      },
+    };
+  }
+
+  if (executeObj['steps'] !== undefined) {
+    throw new Error(`${path}.execute.steps is only allowed when ${path}.execute.type is loop`);
+  }
+
   return {
     ...stepBase,
-    repeat: {
-      max,
-      until:
-        repeatObj['until'] !== undefined
-          ? assertString(repeatObj['until'], `${path}.repeat.until`)
-          : undefined,
-    },
-    steps,
+    execute: validateNonLoopExecute(obj['execute'], `${path}.execute`),
   };
 };
 

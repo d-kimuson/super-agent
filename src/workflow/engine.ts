@@ -2,8 +2,9 @@ import { createDefaultRunners } from './executors';
 import { evaluateCondition } from './expression';
 import { renderTemplate } from './template';
 import {
-  type ExecuteStep,
   type OnError,
+  type LoopStep,
+  type NonLoopStep,
   type StepDefinition,
   type StepOutputs,
   type StepResult,
@@ -109,8 +110,8 @@ const indexSteps = (steps: StepDefinition[]) => {
       throw new Error(`Duplicate step id: ${step.id}`);
     }
     map.set(step.id, step);
-    if ('repeat' in step && step.steps) {
-      step.steps.forEach(visit);
+    if (step.execute.type === 'loop') {
+      step.execute.steps.forEach(visit);
     }
   };
   steps.forEach(visit);
@@ -121,8 +122,8 @@ const initializeResults = (steps: StepDefinition[]) => {
   const results: Record<string, StepResult> = {};
   const visit = (step: StepDefinition) => {
     results[step.id] = { status: 'pending', outputs: {}, attempts: 0 };
-    if ('repeat' in step && step.steps) {
-      step.steps.forEach(visit);
+    if (step.execute.type === 'loop') {
+      step.execute.steps.forEach(visit);
     }
   };
   steps.forEach(visit);
@@ -324,9 +325,16 @@ export const runWorkflow = async ({
     result.status = status;
     if (status === 'running') {
       result.startedAt = isoTime(clock.now());
+      result.finishedAt = undefined;
+      result.error = undefined;
+      return;
     }
     if (status === 'success' || status === 'failed' || status === 'skipped') {
       result.finishedAt = isoTime(clock.now());
+    }
+    if ((status === 'success' || status === 'skipped') && error === undefined) {
+      result.error = undefined;
+      return;
     }
     if (error !== undefined) {
       result.error = error;
@@ -354,7 +362,7 @@ export const runWorkflow = async ({
     return { status: 'failed' };
   };
 
-  const runExecuteStep = async (step: ExecuteStep): Promise<{ status: StepStatus }> => {
+  const runExecuteStep = async (step: NonLoopStep): Promise<{ status: StepStatus }> => {
     const retryDef = getRetryDef(step);
 
     let attempt = 0;
@@ -644,58 +652,77 @@ export const runWorkflow = async ({
       }
     }
 
-    if ('repeat' in step) {
-      const repeat = step.repeat;
-      const childSteps = step.steps;
-      if (!repeat || !childSteps) {
-        return finalizeStepFailure(step, 'repeat block is invalid');
-      }
-      setStatus(step.id, 'running');
-      const repeatRecord = startExecutionRecord({
-        stepId: step.id,
-        attempt: 1,
-        type: 'repeat',
-        input: { max: repeat.max, until: repeat.until ?? null },
-        status: 'success',
-        startedAt: isoTime(clock.now()),
-        finishedAt: isoTime(clock.now()),
-      });
-      let iterations = 0;
-      for (let iteration = 1; iteration <= repeat.max; iteration += 1) {
-        iterations = iteration;
-        for (const child of childSteps) {
-          resetStep(getResult(child.id));
-        }
-        const result = await executeStepList(childSteps);
-        if (result.status === 'failed') {
-          finishExecutionRecord(repeatRecord, {
-            status: 'failed',
-            output: { iterations },
-            error: 'child step failed',
-          });
-          return { status: 'failed' };
-        }
-        if (repeat.until !== undefined) {
-          const condition = renderIfExpression(repeat.until, resolved.inputs, results);
-          if (!condition.ok) {
-            finishExecutionRecord(repeatRecord, {
-              status: 'failed',
-              output: { iterations },
-              error: condition.error,
-            });
-            return finalizeStepFailure(step, condition.error);
+    const execute = step.execute;
+    if (execute.type === 'loop') {
+      const loopStep: LoopStep = { ...step, execute };
+      const loop = loopStep.execute;
+      const childSteps = loop.steps;
+      const retryDef = getRetryDef(loopStep);
+
+      let attempt = 0;
+      while (true) {
+        attempt += 1;
+        getResult(loopStep.id).attempts = attempt;
+        setStatus(loopStep.id, 'running');
+        log(loopStep.id, 'info', `attempt ${attempt} start`);
+
+        const loopRecord = startExecutionRecord({
+          stepId: loopStep.id,
+          attempt,
+          type: 'loop',
+          input: { max: loop.max, until: loop.until ?? null },
+          status: 'success',
+          startedAt: isoTime(clock.now()),
+          finishedAt: isoTime(clock.now()),
+        });
+
+        let iterations = 0;
+        let loopError: string | undefined;
+
+        for (let iteration = 1; iteration <= loop.max; iteration += 1) {
+          iterations = iteration;
+          for (const child of childSteps) {
+            resetStep(getResult(child.id));
           }
-          if (condition.value === true) {
+          const result = await executeStepList(childSteps);
+          if (result.status === 'failed') {
+            loopError = 'child step failed';
             break;
           }
+          if (loop.until !== undefined) {
+            const condition = renderIfExpression(loop.until, resolved.inputs, results);
+            if (!condition.ok) {
+              loopError = condition.error;
+              break;
+            }
+            if (condition.value === true) {
+              break;
+            }
+          }
         }
+
+        if (loopError !== undefined) {
+          finishExecutionRecord(loopRecord, {
+            status: 'failed',
+            output: { iterations },
+            error: loopError,
+          });
+          if (attempt <= retryDef.max) {
+            await applyRetryDelay(attempt, retryDef);
+            continue;
+          }
+          return finalizeStepFailure(loopStep, loopError);
+        }
+
+        finishExecutionRecord(loopRecord, { status: 'success', output: { iterations } });
+        setStatus(loopStep.id, 'success');
+        log(loopStep.id, 'info', 'success');
+        return { status: 'success' };
       }
-      finishExecutionRecord(repeatRecord, { status: 'success', output: { iterations } });
-      setStatus(step.id, 'success');
-      return { status: 'success' };
     }
 
-    return runExecuteStep(step);
+    const nonLoopStep: NonLoopStep = { ...step, execute };
+    return runExecuteStep(nonLoopStep);
   };
 
   const executeStepList = async (steps: StepDefinition[]): Promise<{ status: StepStatus }> => {

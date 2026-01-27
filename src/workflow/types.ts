@@ -50,26 +50,26 @@ export type SlackExecute = {
   };
 };
 
-export type ExecuteDef = ShellExecute | AgentExecute | SlackExecute;
-
-export type RepeatDef = {
+export type LoopExecute = {
+  type: 'loop';
   max: number;
   until?: string;
-};
-
-export type ExecuteStep = StepBase & {
-  execute: ExecuteDef;
-  repeat?: undefined;
-  steps?: undefined;
-};
-
-export type RepeatStep = StepBase & {
-  repeat: RepeatDef;
   steps: StepDefinition[];
-  execute?: undefined;
 };
 
-export type StepDefinition = ExecuteStep | RepeatStep;
+export type NonLoopExecute = ShellExecute | AgentExecute | SlackExecute;
+
+export type ExecuteDef = NonLoopExecute | LoopExecute;
+
+export type NonLoopStep = StepBase & {
+  execute: NonLoopExecute;
+};
+
+export type LoopStep = StepBase & {
+  execute: LoopExecute;
+};
+
+export type StepDefinition = NonLoopStep | LoopStep;
 
 export type WorkflowDefinition = {
   id: string;
@@ -161,7 +161,7 @@ export type WorkflowEngineOptions = {
 export type StepExecutionRecord = {
   stepId: string;
   attempt: number;
-  type: ExecuteDef['type'] | 'repeat';
+  type: ExecuteDef['type'];
   input: Record<string, unknown>;
   output?: Record<string, unknown> | null;
   status: 'success' | 'failed';

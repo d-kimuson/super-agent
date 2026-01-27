@@ -1,0 +1,239 @@
+# Workflow Engine YAML (MVP)
+# - id は参照用の安定識別子（必須）
+# - name は表示名（任意）
+# - steps は上から順に定義するが、実行順は needs / if / loop により決まる
+# - 変数参照: ${{ ... }} で式評価（Expression language は後述）
+
+id: impl
+name: 実装
+description: 実装を行うWF
+
+inputs:
+  create-branch:
+    type: boolean
+    default: false
+
+  create-pr:
+    type: boolean
+    default: false
+
+  ci-check:
+    type: boolean
+    default: false
+
+steps:
+  # -------------------------
+  # Shell step
+  # -------------------------
+  - id: get_github_issues
+    name: get-github-issues
+    execute:
+      type: shell
+      run: |
+        gh issue ls --label 'ai'
+    # Shell step outputs (MVP)
+    # - stdout: コマンドの標準出力（string）
+    # - stderr: 標準エラー（string）
+    # - exitCode: 終了コード（int）
+    # NOTE: artifacts はMVPでは扱わない（ファイルは作ってよいが参照は path 直指定）
+    # NOTE: shell の結果は Engine が自動で stdout/stderr/exitCode をキャプチャする
+    timeoutSeconds: 60
+    onError: fail # fail | skip | retry
+    retry:
+      max: 0 # 0ならリトライなし
+      strategy: fixed # fixed | backoff（MVP）
+      seconds: 0 # fixed の待ち時間、backoff の初期値としても使う
+
+  - id: select_issue
+    needs: [get_github_issues]
+    execute:
+      type: agent
+      sdkType: claude
+      model: haiku
+      prompt: |
+        あなたの責務は提示されたIssueから優先度を評価し、着手するタスクを1つ決めることです。
+
+        issues:
+        ${{ steps.get_github_issues.stdout }}
+    # Agent step outputs (MVP)
+    # - output: モデルの生出力（string）
+    # - structured: 任意。定義されていれば Engine が JSON としてパースする（失敗時は step 失敗）
+    #   - structured は「モデルが JSON を返す」前提。スキーマ検証はMVPでは任意（将来拡張）。
+    structured:
+      # ここにキーを列挙しておくと、UIや後続参照の期待値として役立つ（スキーマ検証はMVPではしない）
+      number: { type: integer }
+      title: { type: string }
+      url: { type: string }
+      rationale: { type: string }
+    timeoutSeconds: 120
+    onError: fail
+    retry: { max: 1, strategy: fixed, seconds: 2 }
+
+  - id: prepare_branch
+    needs: [select_issue]
+    if: ${{ inputs.create-branch }}
+    execute:
+      type: agent
+      sdkType: claude
+      model: haiku
+      prompt: |
+        これから ${{ steps.select_issue.output }} の実装を行うため準備を行ってください。
+
+        - ブランチ準備:
+          - 変更がある場合は退避してから、main ブランチに移動
+          - main を pull して更新
+          - ブランチ作成: <tag>/<issue-number>-<short-description>
+        - 環境準備:
+          - mise i
+          - pnpm i --ignore-scripts --frozen-lockfile
+    timeoutSeconds: 300
+    onError: fail
+    retry: { max: 0, strategy: fixed, seconds: 0 }
+
+  - id: plan
+    # needs の仕様（MVP重要）
+    # - needs は「必須の依存」を表す
+    # - 依存stepが成功していることが原則
+    # - ただし依存stepが "skipped" の場合、Engine は「さらに親の needs を見る」
+    #   → 依存stepの needs を再帰的に辿り、最終的に "skipped ではない祖先依存" が全て成功していれば OK とする
+    #   → これにより、if で丸ごと飛ばした前処理があっても downstream を実行できる
+    needs: [prepare_branch]
+    execute:
+      type: agent
+      sdkType: codex
+      model: gpt-5.2
+      prompt: |
+        これから ${{ steps.select_issue.output }} の実装を行うための計画を立ててください。
+        選択肢となる複数の設計から今回の要件を満たすものを選択肢します。
+        その実装方針を実現するための計画を建てます。
+
+        設計エージェントによる設計:
+        ${{ steps.select_issue.output }}
+    timeoutSeconds: 300
+    onError: fail
+    retry: { max: 1, strategy: backoff, seconds: 2 } # backoff: 2,4,8...（max回まで）
+
+  - id: implement
+    needs: [plan]
+    execute:
+      type: agent
+      sdkType: claude
+      model: haiku
+      prompt: |
+        これから ${{ steps.select_issue.output }} の実装を行ってください。
+        ステータス: ブランチ作成・設計済み
+
+        設計エージェントによる設計:
+        ${{ steps.plan.output }}
+
+        サブエージェントをオーケストレーションして実装を行ってください。
+    timeoutSeconds: 900
+    onError: fail
+    retry: { max: 0, strategy: fixed, seconds: 0 }
+
+  # -------------------------
+  # Loop block - MVPのループ表現
+  # -------------------------
+  - id: review_cycle
+    # loop の仕様（MVP重要）
+    # - execute.type=loop は「ブロック内steps」を最大 max 回繰り返す
+    # - 各 iteration で steps の出力は上書きされる（MVPでは履歴保持しない）
+    # - until が true になったらそこでループ終了
+    # - until は「ブロック内で定義された step 出力」を参照できる（例: steps.review.structured.approved）
+    execute:
+      type: loop
+      max: 5
+      until: ${{ steps.review.structured.approved == true }}
+      steps:
+        - id: summarize_diff
+          needs: [implement]
+          execute:
+            type: shell
+            run: |
+              # MVP: diff を丸ごと出すと巨大化しがちなので、まずはファイル一覧とstat中心にする
+              git diff --name-only main..HEAD
+              echo "----"
+              git diff --stat main..HEAD
+          timeoutSeconds: 60
+          onError: fail
+          retry: { max: 0, strategy: fixed, seconds: 0 }
+
+        - id: review
+          needs: [summarize_diff]
+          execute:
+            type: agent
+            sdkType: claude
+            model: haiku
+            structured:
+              approved: { type: boolean }
+              comments: { type: string } # 修正指示/総評
+            prompt: |
+              ${{ steps.select_issue.output }} の実装のレビューを行ってください。
+
+              実装エージェントによるサマリー:
+              ${{ steps.implement.output }}
+
+              変更内容:
+              ${{ steps.summarize_diff.stdout }}
+
+              出力は JSON で返してください:
+              {"approved": true/false, "comments": "..."}
+          timeoutSeconds: 300
+          onError: fail
+          retry: { max: 1, strategy: fixed, seconds: 2 }
+
+        - id: apply_fixes
+          # approved なら修正不要なのでスキップ
+          if: ${{ steps.review.structured.approved != true }}
+          needs: [review]
+          execute:
+            type: agent
+            sdkType: claude
+            model: haiku
+            prompt: |
+              レビューコメントに従って修正してください。
+
+              コメント:
+              ${{ steps.review.structured.comments }}
+          timeoutSeconds: 900
+          onError: fail
+          retry: { max: 0, strategy: fixed, seconds: 0 }
+
+  - id: create_pr
+    needs: [review_cycle]
+    if: ${{ inputs.create-pr }}
+    execute:
+      type: shell
+      run: |
+        # MVP: branch 名を agent が作った前提が不安定なので、いったん HEAD を使う運用に寄せる
+        # （branch 出力の型や生成ロジックは将来整備）
+        gh pr create --base main --head HEAD \
+          --title "${{ steps.select_issue.structured.title || 'AI Implementation' }}" \
+          --body "${{ steps.review.output }}"
+    timeoutSeconds: 120
+    onError: fail
+    retry: { max: 1, strategy: fixed, seconds: 2 }
+
+  - id: ci_check
+    # 省略（MVPでは未実装でも良い）
+    if: ${{ inputs.ci-check }}
+    needs: [create_pr]
+    execute:
+      type: shell
+      run: |
+        echo "ci-check placeholder"
+    timeoutSeconds: 600
+    onError: fail
+    retry: { max: 0, strategy: fixed, seconds: 0 }
+
+  - id: notify
+    # needs: ci_check が skipped になる可能性があるので、MVPの needs スキップ継承ルールにより実行できる
+    needs: [ci_check]
+    execute:
+      type: slack
+      channel: '#ai-workflow'
+      message:
+        text: |
+          ${{ steps.select_issue.structured.title || steps.select_issue.output }} の実装が完了しました。
+          PR: ${{ steps.create_pr.stdout }}
+          CI: ${{ steps.ci_check.stdout }}

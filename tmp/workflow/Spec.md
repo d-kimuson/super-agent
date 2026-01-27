@@ -29,9 +29,13 @@
   - { type: "retry", max: integer(>=1), strategy?: "fixed"|"backoff", seconds?: integer, final?: "fail"|"skip" }
     - final: リトライ尽きた後の挙動（default="fail"）
 - retry: (optional, legacy) # loader で onError.type="retry" に正規化される
-- execute: ExecuteDef (optional) # repeatブロックの場合は不要
-- repeat: RepeatDef (optional) # repeat と execute は排他
-- steps: Step[] (optional) # repeatブロック内の子ステップ（repeatがある時のみ）
+- execute: ExecuteDef (required)
+
+legacy:
+
+- repeat: { max: integer, until?: string-expr, steps?: Step[] } (optional, legacy) # loader で execute.type="loop" に正規化される（非推奨）
+- steps: Step[] (optional, legacy) # repeat とセットでのみ使用（repeat.steps があればこちらは不可）（非推奨）
+- execute と repeat の同居はエラー
 
 ステップ状態（Engineが持つ）：
 
@@ -86,13 +90,14 @@ outputs（MVP最小）：
 
 - steps.<id>.output : string（送信したtextをそのまま入れてもいい）
 
-## 3.5 RepeatDef（ループ）
+## 3.5 loop（ループ）
 
-repeat:
+execute:
 
+- type: loop
 - max: integer (required) # 最大反復回数
 - until: string-expr # true で終了（省略時は max 回やる）
-- steps: Step[] # ブロック内ステップ
+- steps: Step[] (required) # ブロック内ステップ（ネストは execute.steps）
 
 ルール（MVP）：
 
@@ -100,6 +105,15 @@ repeat:
 - until は そのイテレーションで実行された出力 を参照できる
 - 反復終了時、ブロック外からは「最後のイテレーションの出力」が見える
 - 例：ブロック外から steps.review.structured.approved を参照できる（“最後のreview”）
+
+legacy repeat（互換・非推奨）：
+
+- 入力としては従来の `repeat:` 形式も受け付ける（非推奨）
+  - `repeat.steps:` がある場合: それをループブロックの steps として扱う
+  - `repeat.steps:` がない場合: 従来どおりトップレベルの `steps:` をループブロックの steps として扱う
+  - `repeat.steps:` とトップレベル `steps:` の同居はエラー（曖昧さ回避）
+- loader が `execute.type="loop"` へ正規化してから engine に渡す（内部表現は常に loop）
+- 新規定義は `execute.type="loop"` 形式を使用する（repeat は互換のための入力専用）
 
 ## 3.6 needs の評価（あなた案を仕様化）
 
@@ -211,7 +225,7 @@ slack:
 - 実装: ⚠️ `src/workflow/engine.ts`（runner はスタブ）
 - テスト: ❌
 
-### 3.5 RepeatDef（ループ）
+### 3.5 loop（ループ）
 
 - 実装: ✅ `src/workflow/engine.ts`（上書き/until/max）
 - テスト: ✅ `src/workflow/engine.test.ts`
@@ -262,31 +276,10 @@ Session 1 (2026-01-27):
 - [x] minimal-shell-agent workflow runs with shell-only steps (run-agent=false)
 - [x] minimal-shell-agent workflow runs with agent steps (run-agent=true, Claude SDK)
 
-### Loop (repeat) Testing
+### Loop (execute.type=loop) Testing
 
 - [x] Loop executes up to max iterations correctly
-- [ ] **BUG: until condition does NOT terminate loop early**
-  - Workflow: test-loop-file-counter.yaml
-  - Steps: repeat block with until condition checking steps.check_counter.stdout equals 'DONE'
-  - Expected: Loop exits when check_counter outputs 'DONE' (iteration 3)
-  - Actual: Loop runs all 10 iterations, ignoring until condition becoming true
-
-<details>
-<summary>Until condition bug details</summary>
-
-Test workflow definition:
-
-```yaml
-repeat:
-  max: 10
-  until: steps.check_counter.stdout equals 'DONE'
-```
-
-Execution trace shows check_counter.stdout became "DONE" on iteration 3, but loop continued for all 10 iterations.
-
-Debug log path: .super-agent/debug/workflow/8dd144b9-3c8b-435c-addb-24864325cada.json
-
-</details>
+- [x] until condition terminates loop early（unit test: `src/workflow/engine.test.ts`）
 
 ### needs-skip Inheritance
 
