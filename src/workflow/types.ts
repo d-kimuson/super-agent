@@ -6,13 +6,18 @@ export type InputDef = {
   required?: boolean;
 };
 
-export type RetryDef = {
-  max?: number;
-  strategy?: 'fixed' | 'backoff';
-  seconds?: number;
-};
+export type RetryStrategy = 'fixed' | 'backoff';
 
-export type OnError = 'fail' | 'skip' | 'retry';
+export type OnError =
+  | { type: 'fail' }
+  | { type: 'skip' }
+  | {
+      type: 'retry';
+      max: number;
+      strategy?: RetryStrategy;
+      seconds?: number;
+      final?: 'fail' | 'skip';
+    };
 
 export type StepBase = {
   id: string;
@@ -21,7 +26,6 @@ export type StepBase = {
   if?: string;
   timeoutSeconds?: number;
   onError?: OnError;
-  retry?: RetryDef;
 };
 
 export type ShellExecute = {

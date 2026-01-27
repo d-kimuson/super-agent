@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runWorkflow } from './engine';
+import { loadWorkflowFromYaml } from './loader';
 import { type WorkflowDefinition } from './types';
 
 const createShellRunner =
@@ -113,14 +114,13 @@ describe('runWorkflow', () => {
     expect(getStep(result, 'inner').outputs.stdout).toBe('done');
   });
 
-  it('onError=skip allows downstream execution after retries', async () => {
+  it('onError retry (final=skip) allows downstream execution after retries', async () => {
     const workflow: WorkflowDefinition = {
       id: 'wf',
       steps: [
         {
           id: 'flaky',
-          onError: 'skip',
-          retry: { max: 1, strategy: 'fixed', seconds: 0 },
+          onError: { type: 'retry', max: 1, strategy: 'fixed', seconds: 0, final: 'skip' },
           execute: { type: 'shell', run: 'fail' },
         },
         {
@@ -130,6 +130,82 @@ describe('runWorkflow', () => {
         },
       ],
     };
+
+    const result = await runWorkflow({
+      workflow,
+      inputs: {},
+      options: {
+        runners: {
+          shell: createShellRunner((stepId) => ({
+            exitCode: stepId === 'flaky' ? 1 : 0,
+            stdout: stepId,
+          })),
+        },
+        clock: {
+          now: () => 0,
+          sleep: async () => {},
+        },
+      },
+    });
+
+    expect(getStep(result, 'flaky').status).toBe('skipped');
+    expect(getStep(result, 'after').status).toBe('success');
+  });
+
+  it('retries max=2 means 2 retries (3 attempts total)', async () => {
+    const workflow: WorkflowDefinition = {
+      id: 'wf',
+      steps: [
+        {
+          id: 'flaky',
+          onError: { type: 'retry', max: 2, strategy: 'fixed', seconds: 0 },
+          execute: { type: 'shell', run: 'fail' },
+        },
+      ],
+    };
+
+    let calls = 0;
+    const result = await runWorkflow({
+      workflow,
+      inputs: {},
+      options: {
+        runners: {
+          shell: () => {
+            calls += 1;
+            return Promise.resolve({ stdout: '', stderr: 'error', exitCode: 1 });
+          },
+        },
+        clock: {
+          now: () => 0,
+          sleep: async () => {},
+        },
+      },
+    });
+
+    expect(result.status).toBe('failed');
+    expect(getStep(result, 'flaky').attempts).toBe(3);
+    expect(calls).toBe(3);
+  });
+
+  it('legacy onError=skip + retry normalizes to final=skip and continues downstream', async () => {
+    const workflow = loadWorkflowFromYaml(`
+id: wf
+steps:
+  - id: flaky
+    onError: skip
+    retry:
+      max: 1
+      strategy: fixed
+      seconds: 0
+    execute:
+      type: shell
+      run: fail
+  - id: after
+    needs: [flaky]
+    execute:
+      type: shell
+      run: after
+`);
 
     const result = await runWorkflow({
       workflow,

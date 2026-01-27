@@ -3,6 +3,7 @@ import { evaluateCondition } from './expression';
 import { renderTemplate } from './template';
 import {
   type ExecuteStep,
+  type OnError,
   type StepDefinition,
   type StepOutputs,
   type StepResult,
@@ -221,6 +222,30 @@ const defaultRetry: { max: number; strategy: 'fixed' | 'backoff'; seconds: numbe
   seconds: 1,
 };
 
+const getOnError = (step: StepDefinition): OnError => step.onError ?? { type: 'fail' };
+
+const getRetryDef = (
+  step: StepDefinition,
+): { max: number; strategy: 'fixed' | 'backoff'; seconds: number } => {
+  const onError = getOnError(step);
+  if (onError.type !== 'retry') {
+    return { ...defaultRetry };
+  }
+  return {
+    max: onError.max,
+    strategy: onError.strategy ?? defaultRetry.strategy,
+    seconds: onError.seconds ?? defaultRetry.seconds,
+  };
+};
+
+const getFinalOnError = (step: StepDefinition): 'fail' | 'skip' => {
+  const onError = getOnError(step);
+  if (onError.type === 'retry') {
+    return onError.final ?? 'fail';
+  }
+  return onError.type;
+};
+
 export const runWorkflow = async ({
   workflow,
   inputs,
@@ -318,7 +343,7 @@ export const runWorkflow = async ({
   };
 
   const finalizeStepFailure = (step: StepDefinition, error: string): { status: StepStatus } => {
-    const onError = step.onError ?? 'fail';
+    const onError = getFinalOnError(step);
     if (onError === 'skip') {
       setStatus(step.id, 'skipped', error);
       log(step.id, 'info', `skipped: ${error}`);
@@ -330,11 +355,7 @@ export const runWorkflow = async ({
   };
 
   const runExecuteStep = async (step: ExecuteStep): Promise<{ status: StepStatus }> => {
-    const retryDef = {
-      max: step.retry?.max ?? defaultRetry.max,
-      strategy: step.retry?.strategy ?? defaultRetry.strategy,
-      seconds: step.retry?.seconds ?? defaultRetry.seconds,
-    };
+    const retryDef = getRetryDef(step);
 
     let attempt = 0;
     while (true) {
@@ -730,7 +751,7 @@ export const runWorkflow = async ({
       const result = await runStep(readyStep);
       pending.delete(readyStep.id);
 
-      if (result.status === 'failed' && (readyStep.onError ?? 'fail') !== 'skip') {
+      if (result.status === 'failed' && getFinalOnError(readyStep) !== 'skip') {
         return { status: 'failed' };
       }
     }

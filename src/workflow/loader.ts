@@ -3,7 +3,8 @@ import { providersSchema } from '../config/schema';
 import {
   type ExecuteDef,
   type InputDef,
-  type RetryDef,
+  type OnError,
+  type RetryStrategy,
   type StepBase,
   type StepDefinition,
   type WorkflowDefinition,
@@ -38,7 +39,13 @@ const assertArray = (value: unknown, path: string): unknown[] => {
   return items;
 };
 
-const parseRetry = (value: unknown, path: string): RetryDef | undefined => {
+type LegacyRetryDef = {
+  max?: number;
+  strategy?: RetryStrategy;
+  seconds?: number;
+};
+
+const parseLegacyRetry = (value: unknown, path: string): LegacyRetryDef | undefined => {
   if (value === undefined) {
     return undefined;
   }
@@ -62,6 +69,134 @@ const parseRetry = (value: unknown, path: string): RetryDef | undefined => {
     strategy,
     seconds: secondsValue,
   };
+};
+
+const assertAllowedKeys = (obj: Record<string, unknown>, allowed: Set<string>, path: string) => {
+  for (const key of Object.keys(obj)) {
+    if (!allowed.has(key)) {
+      throw new Error(`${path}.${key} is not allowed`);
+    }
+  }
+};
+
+const assertRetryMax = (value: unknown, path: string): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${path} must be a number`);
+  }
+  if (!Number.isInteger(value)) {
+    throw new Error(`${path} must be an integer`);
+  }
+  if (value < 1) {
+    throw new Error(`${path} must be >= 1`);
+  }
+  return value;
+};
+
+const parseOnError = ({
+  onErrorRaw,
+  retryRaw,
+  path,
+}: {
+  onErrorRaw: unknown;
+  retryRaw: unknown;
+  path: string;
+}): OnError | undefined => {
+  const retry = parseLegacyRetry(retryRaw, `${path}.retry`);
+
+  const requireRetryMax = (source: string) => {
+    const max = retry?.max;
+    if (max === undefined) {
+      throw new Error(`${source} requires ${path}.retry.max`);
+    }
+    return assertRetryMax(max, `${path}.retry.max`);
+  };
+
+  if (onErrorRaw !== undefined) {
+    if (typeof onErrorRaw === 'string') {
+      if (onErrorRaw !== 'fail' && onErrorRaw !== 'skip' && onErrorRaw !== 'retry') {
+        throw new Error(`${path}.onError must be one of fail|skip|retry or an object`);
+      }
+      if (retryRaw !== undefined) {
+        const max = requireRetryMax(`${path}.retry`);
+        const normalized: OnError = {
+          type: 'retry',
+          max,
+          ...(retry?.strategy !== undefined ? { strategy: retry.strategy } : {}),
+          ...(retry?.seconds !== undefined ? { seconds: retry.seconds } : {}),
+          final: onErrorRaw === 'skip' ? 'skip' : 'fail',
+        };
+        return normalized;
+      }
+      if (onErrorRaw === 'retry') {
+        throw new Error(`${path}.onError=retry requires ${path}.retry.max`);
+      }
+      return onErrorRaw === 'fail' ? { type: 'fail' } : { type: 'skip' };
+    }
+
+    if (typeof onErrorRaw === 'object' && onErrorRaw !== null && !Array.isArray(onErrorRaw)) {
+      if (retryRaw !== undefined) {
+        throw new Error(`${path}.retry cannot be used with ${path}.onError object`);
+      }
+      const onErrorObj = assertObject(onErrorRaw, `${path}.onError`);
+      const type = assertString(onErrorObj['type'], `${path}.onError.type`);
+      if (type === 'fail' || type === 'skip') {
+        assertAllowedKeys(onErrorObj, new Set(['type']), `${path}.onError`);
+        return type === 'fail' ? { type: 'fail' } : { type: 'skip' };
+      }
+      if (type === 'retry') {
+        assertAllowedKeys(
+          onErrorObj,
+          new Set(['type', 'max', 'strategy', 'seconds', 'final']),
+          `${path}.onError`,
+        );
+        const strategyValue = onErrorObj['strategy'];
+        const secondsValue = onErrorObj['seconds'];
+        const finalValue = onErrorObj['final'];
+        if (
+          strategyValue !== undefined &&
+          strategyValue !== 'fixed' &&
+          strategyValue !== 'backoff'
+        ) {
+          throw new Error(`${path}.onError.strategy must be fixed or backoff`);
+        }
+        if (secondsValue !== undefined && typeof secondsValue !== 'number') {
+          throw new Error(`${path}.onError.seconds must be a number`);
+        }
+        if (finalValue !== undefined && finalValue !== 'fail' && finalValue !== 'skip') {
+          throw new Error(`${path}.onError.final must be fail or skip`);
+        }
+        const max = assertRetryMax(onErrorObj['max'], `${path}.onError.max`);
+        const strategy =
+          strategyValue === 'fixed' || strategyValue === 'backoff' ? strategyValue : undefined;
+        const final = finalValue === 'fail' || finalValue === 'skip' ? finalValue : undefined;
+        const normalized: OnError = {
+          type: 'retry',
+          max,
+          ...(strategy !== undefined ? { strategy } : {}),
+          ...(secondsValue !== undefined ? { seconds: secondsValue } : {}),
+          ...(final !== undefined ? { final } : {}),
+        };
+        return normalized;
+      }
+      throw new Error(`${path}.onError.type must be one of fail|skip|retry`);
+    }
+
+    throw new Error(`${path}.onError must be one of fail|skip|retry or an object`);
+  }
+
+  if (retryRaw !== undefined) {
+    const max = requireRetryMax(`${path}.retry`);
+    const normalized: OnError = {
+      type: 'retry',
+      max,
+      ...(retry?.strategy !== undefined ? { strategy: retry.strategy } : {}),
+      ...(retry?.seconds !== undefined ? { seconds: retry.seconds } : {}),
+      final: 'fail',
+    };
+    return normalized;
+  }
+
+  return undefined;
 };
 
 const validateExecute = (value: unknown, path: string): ExecuteDef => {
@@ -126,19 +261,11 @@ const validateStep = (value: unknown, path: string): StepDefinition => {
   if (timeoutSeconds !== undefined && typeof timeoutSeconds !== 'number') {
     throw new Error(`${path}.timeoutSeconds must be a number`);
   }
-  const onErrorValue = obj['onError'];
-  if (
-    onErrorValue !== undefined &&
-    onErrorValue !== 'fail' &&
-    onErrorValue !== 'skip' &&
-    onErrorValue !== 'retry'
-  ) {
-    throw new Error(`${path}.onError must be one of fail|skip|retry`);
-  }
-  const onError =
-    onErrorValue === 'fail' || onErrorValue === 'skip' || onErrorValue === 'retry'
-      ? onErrorValue
-      : undefined;
+  const onError = parseOnError({
+    onErrorRaw: obj['onError'],
+    retryRaw: obj['retry'],
+    path,
+  });
   const stepBase: StepBase = {
     id,
     name: name ?? undefined,
@@ -146,7 +273,6 @@ const validateStep = (value: unknown, path: string): StepDefinition => {
     if: ifValue ?? undefined,
     timeoutSeconds: timeoutSeconds ?? undefined,
     onError,
-    retry: parseRetry(obj['retry'], `${path}.retry`),
   };
 
   const hasExecute = obj['execute'] !== undefined;
