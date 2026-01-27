@@ -7,6 +7,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { configFileSchema } from '../../config/schema';
 import { logger } from '../../lib/logger';
+import { runExtendedSetup } from './setup/extendedSetup';
 
 type SetupAnswers = {
   agentDirs: string[];
@@ -162,7 +163,7 @@ export const createSetupCommand = () => {
       logger.info('\n📝 Want to keep local tweaks out of version control?');
       logger.info(`   Use ${resolve(configDir, 'config.local.json')} for overrides.`);
 
-      logger.info(`\n🎉 Setup completed!`);
+      await runExtendedSetup({ homeDir: homedir() });
     } catch (error) {
       logger.error('Setup failed:', error);
       process.exit(1);

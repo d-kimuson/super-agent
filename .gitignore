@@ -143,5 +143,8 @@ vite.config.ts.timestamp-*
 # Build output
 dist/
 
+# Claude Code
+.claude/settings.local.json
+
 # super-agent
 .super-agent/debug

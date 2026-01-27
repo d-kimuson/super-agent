@@ -6,6 +6,7 @@ export type TomlJsonMap = ReturnType<typeof TOML.parse>;
 
 const jsonRecordSchema = z.record(z.string(), z.unknown());
 const stringArraySchema = z.array(z.string());
+const numberSchema = z.number();
 
 type EnsureJsonRecordResult =
   | { code: 'success'; value: Record<string, unknown> }
@@ -27,6 +28,16 @@ const ensureStringArray = (value: unknown, label: string): EnsureStringArrayResu
   const parsed = stringArraySchema.safeParse(value);
   if (!parsed.success) {
     return { code: 'invalid', message: `${label} must be an array of strings` };
+  }
+  return { code: 'success', value: parsed.data };
+};
+
+type EnsureNumberResult = { code: 'success'; value: number } | { code: 'invalid'; message: string };
+
+const ensureNumber = (value: unknown, label: string): EnsureNumberResult => {
+  const parsed = numberSchema.safeParse(value);
+  if (!parsed.success) {
+    return { code: 'invalid', message: `${label} must be a number` };
   }
   return { code: 'success', value: parsed.data };
 };
@@ -72,6 +83,50 @@ export const parseJson = (
 };
 
 export const formatJson = (value: unknown): string => JSON.stringify(value, null, 2) + '\n';
+
+export type MergeValueResult<TValue> =
+  | { code: 'success'; value: TValue }
+  | { code: 'invalid'; message: string };
+
+export const mergeClaudeSettingsConfig = (params: {
+  current: unknown;
+  denyToolNames: readonly string[];
+}): MergeValueResult<Record<string, unknown>> => {
+  const rootResult = ensureJsonRecord(params.current, 'settings.json root');
+  if (rootResult.code !== 'success') {
+    return rootResult;
+  }
+
+  const permissionsRaw = rootResult.value['permissions'];
+  const permissionsResult =
+    permissionsRaw === undefined
+      ? ({ code: 'success', value: {} } satisfies EnsureJsonRecordResult)
+      : ensureJsonRecord(permissionsRaw, 'permissions');
+  if (permissionsResult.code !== 'success') {
+    return permissionsResult;
+  }
+
+  const denyRaw = permissionsResult.value['deny'];
+  const denyResult =
+    denyRaw === undefined
+      ? ({ code: 'success', value: [] } satisfies EnsureStringArrayResult)
+      : ensureStringArray(denyRaw, 'permissions.deny');
+  if (denyResult.code !== 'success') {
+    return denyResult;
+  }
+
+  const nextDeny = addUniqueStrings(denyResult.value, params.denyToolNames);
+  const nextPermissions: Record<string, unknown> = {
+    ...permissionsResult.value,
+    deny: nextDeny,
+  };
+  const next: Record<string, unknown> = {
+    ...rootResult.value,
+    permissions: nextPermissions,
+  };
+
+  return { code: 'success', value: next };
+};
 
 export const mergeClaudeSettings = (params: {
   current: unknown;
@@ -131,6 +186,59 @@ export const parseToml = (
 export const formatToml = (value: TomlJsonMap): string => TOML.stringify(value) + '\n';
 
 export const createEmptyToml = (): TomlJsonMap => TOML.parse('');
+
+export const mergeCodexMcpConfig = (params: {
+  current: unknown;
+  serverName: string;
+  toolTimeoutSec: number;
+}): MergeValueResult<TomlJsonMap> => {
+  const rootResult = ensureTomlJsonMap(params.current, 'config.toml root');
+  if (rootResult.code !== 'success') {
+    return rootResult;
+  }
+
+  const root = rootResult.value;
+  const mcpServersRaw = root['mcp_servers'];
+  const mcpServersResult =
+    mcpServersRaw === undefined
+      ? ({ code: 'success', value: createEmptyToml() } satisfies EnsureTomlJsonMapResult)
+      : ensureTomlJsonMap(mcpServersRaw, 'mcp_servers');
+  if (mcpServersResult.code !== 'success') {
+    return mcpServersResult;
+  }
+
+  const serverRaw = mcpServersResult.value[params.serverName];
+  const serverResult =
+    serverRaw === undefined
+      ? ({ code: 'success', value: createEmptyToml() } satisfies EnsureTomlJsonMapResult)
+      : ensureTomlJsonMap(serverRaw, `mcp_servers.${params.serverName}`);
+  if (serverResult.code !== 'success') {
+    return serverResult;
+  }
+
+  const nextServer: TomlJsonMap = { ...serverResult.value };
+  const toolTimeoutRaw = nextServer['tool_timeout_sec'];
+  if (toolTimeoutRaw !== undefined) {
+    const toolTimeoutResult = ensureNumber(
+      toolTimeoutRaw,
+      `mcp_servers.${params.serverName}.tool_timeout_sec`,
+    );
+    if (toolTimeoutResult.code !== 'success') {
+      return toolTimeoutResult;
+    }
+  }
+  if (toolTimeoutRaw !== params.toolTimeoutSec) {
+    nextServer['tool_timeout_sec'] = params.toolTimeoutSec;
+  }
+
+  const nextMcpServers: TomlJsonMap = {
+    ...mcpServersResult.value,
+    [params.serverName]: nextServer,
+  };
+  const next: TomlJsonMap = { ...root, mcp_servers: nextMcpServers };
+
+  return { code: 'success', value: next };
+};
 
 export const mergeCodexMcpServer = (params: {
   current: TomlJsonMap;
