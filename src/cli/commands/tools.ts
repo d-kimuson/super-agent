@@ -110,7 +110,7 @@ export const createToolsCommand = () => {
 
         // CLI args を構築
         const cliArgs = cliArgsSchema.parse({
-          'ssa-dir': opts?.ssaDir,
+          'sa-dir': opts?.ssaDir,
           'available-providers': opts?.availableProviders,
           'disabled-models': opts?.disabledModels,
           'agents-dir': opts?.agentsDir,
@@ -227,7 +227,7 @@ export const createToolsCommand = () => {
         const opts = rootCommand?.opts<GlobalOptions>();
 
         const cliArgs = cliArgsSchema.parse({
-          'ssa-dir': opts?.ssaDir,
+          'sa-dir': opts?.ssaDir,
           'available-providers': opts?.availableProviders,
           'disabled-models': opts?.disabledModels,
           'agents-dir': opts?.agentsDir,

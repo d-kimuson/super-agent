@@ -24,7 +24,7 @@ export type LoadContextOptions = {
  * 優先順位: CliArgs > EnvVars > default
  */
 const resolveConfigPath = (cliArgs: Partial<CliArgs>, envVars: Partial<ParsedEnvVars>): string => {
-  const ssaDir = cliArgs['ssa-dir'] ?? envVars.SA_DIR ?? resolve(homedir(), '.super-agent');
+  const ssaDir = cliArgs['sa-dir'] ?? envVars.SA_DIR ?? resolve(homedir(), '.super-agent');
   return resolve(ssaDir, 'config.json');
 };
 
@@ -32,7 +32,7 @@ const resolveLocalConfigPath = (
   cliArgs: Partial<CliArgs>,
   envVars: Partial<ParsedEnvVars>,
 ): string => {
-  const ssaDir = cliArgs['ssa-dir'] ?? envVars.SA_DIR ?? resolve(homedir(), '.super-agent');
+  const ssaDir = cliArgs['sa-dir'] ?? envVars.SA_DIR ?? resolve(homedir(), '.super-agent');
   return resolve(ssaDir, 'config.local.json');
 };
 
@@ -93,7 +93,7 @@ const mergeConfig = (
       : undefined);
 
   const merged = {
-    ssaDir: cliArgs['ssa-dir'] ?? envVars.SA_DIR,
+    ssaDir: cliArgs['sa-dir'] ?? envVars.SA_DIR,
     availableProviders,
     disabledModels,
     defaultModel,

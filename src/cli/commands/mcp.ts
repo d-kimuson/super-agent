@@ -31,7 +31,7 @@ export const createMcpCommand = () => {
 
         // CLI args を構築（型チェックはランタイムで行う）
         const cliArgs: Partial<CliArgs> = {
-          'ssa-dir': opts?.ssaDir,
+          'sa-dir': opts?.ssaDir,
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
           'available-providers': opts?.availableProviders?.split(',') as
             | ('claude' | 'codex' | 'copilot' | 'gemini')[]

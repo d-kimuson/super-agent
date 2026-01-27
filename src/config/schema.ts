@@ -78,7 +78,7 @@ export const parsedEnvVarsSchema = z.object({
 });
 
 export const cliArgsSchema = z.object({
-  'ssa-dir': configRestrictions.ssaDir.optional(),
+  'sa-dir': configRestrictions.ssaDir.optional(),
   'available-providers': configRestrictions.availableProviders.optional(),
   'disabled-models': configRestrictions.disabledModels.optional(),
   'default-model': configRestrictions.defaultModelText.optional(),

@@ -35,7 +35,7 @@ describe('loadContext', () => {
       const nonExistentDir = join(process.cwd(), '__non_existent_test_dir__');
       const context = await loadContext({
         cliArgs: {
-          'ssa-dir': nonExistentDir,
+          'sa-dir': nonExistentDir,
         },
       });
 
@@ -55,7 +55,7 @@ describe('loadContext', () => {
         }),
       );
 
-      const context = await loadContext({ cliArgs: { 'ssa-dir': tempDir } });
+      const context = await loadContext({ cliArgs: { 'sa-dir': tempDir } });
 
       expect(context.config.agentsDirs).toEqual(['/config/agents']);
       expect(context.config.skillsDirs).toEqual(['/config/skills']);
@@ -71,7 +71,7 @@ describe('loadContext', () => {
       );
 
       const context = await loadContext({
-        cliArgs: { 'ssa-dir': tempDir },
+        cliArgs: { 'sa-dir': tempDir },
         envVars: {
           SA_AGENT_DIRS: '/env/agents',
           SA_SKILL_DIRS: '/env/skills',
@@ -99,14 +99,14 @@ describe('loadContext', () => {
       );
 
       const contextFromLocal = await loadContext({
-        cliArgs: { 'ssa-dir': tempDir },
+        cliArgs: { 'sa-dir': tempDir },
       });
 
       expect(contextFromLocal.config.agentsDirs).toEqual(['/local/agents']);
       expect(contextFromLocal.config.skillsDirs).toEqual(['/local/skills']);
 
       const contextFromEnv = await loadContext({
-        cliArgs: { 'ssa-dir': tempDir },
+        cliArgs: { 'sa-dir': tempDir },
         envVars: {
           SA_AGENT_DIRS: '/env/agents',
           SA_SKILL_DIRS: '/env/skills',
@@ -142,7 +142,7 @@ describe('loadContext', () => {
       expect(context.config.skillsDirs).toEqual(['/cli/skills']);
     });
 
-    it('should resolve config path from ssa-dir cli arg', async () => {
+    it('should resolve config path from sa-dir cli arg', async () => {
       const ssaDir = tempDir;
       const autoConfigPath = join(ssaDir, 'config.json');
 
@@ -155,7 +155,7 @@ describe('loadContext', () => {
 
       const context = await loadContext({
         cliArgs: {
-          'ssa-dir': ssaDir,
+          'sa-dir': ssaDir,
         },
       });
 
@@ -370,7 +370,7 @@ agents:
       const nonExistentDir = join(process.cwd(), '__non_existent_test_dir__');
       const context = await loadContext({
         cliArgs: {
-          'ssa-dir': nonExistentDir,
+          'sa-dir': nonExistentDir,
         },
       });
       expect(context.agents).toHaveLength(1);
@@ -410,7 +410,7 @@ Prompt`,
 
         const context = await loadContext({
           cliArgs: {
-            'ssa-dir': tempDir,
+            'sa-dir': tempDir,
             'agents-dir': [tempDir],
           },
         });
@@ -424,7 +424,7 @@ Prompt`,
       const agentDir = join(process.cwd(), 'example-config', 'agents');
       const context = await loadContext({
         cliArgs: {
-          'ssa-dir': '/non/existent',
+          'sa-dir': '/non/existent',
           'agents-dir': [agentDir],
         },
       });
@@ -452,7 +452,7 @@ Prompt`,
 
         const context = await loadContext({
           cliArgs: {
-            'ssa-dir': tempDir,
+            'sa-dir': tempDir,
             'agents-dir': [tempDir],
           },
         });
@@ -591,7 +591,7 @@ Prompt`,
       const nonExistentDir = join(process.cwd(), '__non_existent_test_dir__');
       const context = await loadContext({
         cliArgs: {
-          'ssa-dir': nonExistentDir,
+          'sa-dir': nonExistentDir,
         },
       });
       expect(context.skills).toHaveLength(0);

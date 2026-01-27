@@ -17,7 +17,7 @@ export const createProgram = () => {
     .version(packageJson.version)
     .description(packageJson.description)
     // global options
-    .option('--ssa-dir <path>', 'Super Subagents directory')
+    .option('--sa-dir <path>', 'Super Subagents directory')
     .option('--available-providers <providers>', 'Available providers (comma-separated)')
     .option('--disabled-models <models>', 'Disabled models (comma-separated)')
     .option('--default-model <model>', 'Default model (format: provider:model or provider)')
