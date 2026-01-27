@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.7",
-    "@github/copilot-sdk": "0.1.12",
+    "@github/copilot-sdk": "0.1.18",
     "@hono/node-server": "1.19.9",
     "@hono/zod-validator": "0.7.6",
     "@inquirer/prompts": "8.2.0",
