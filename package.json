@@ -1,7 +1,7 @@
 {
   "name": "@kimuson/super-agent",
   "version": "0.0.0",
-  "description": "FIXME",
+  "description": "Unified orchestration layer for AI agent SDKs with intelligent fallback and sub-agent patterns",
   "license": "MIT",
   "bin": {
     "super-agent": "./dist/cli/index.mjs"
