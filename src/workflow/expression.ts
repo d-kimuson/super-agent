@@ -36,7 +36,7 @@ type AstNode =
   | { type: 'unary'; operator: '!'; expr: AstNode }
   | {
       type: 'binary';
-      operator: '&&' | '||' | '==' | '!=';
+      operator: '&&' | '||' | '==' | '!=' | '>' | '<' | '>=' | '<=';
       left: AstNode;
       right: AstNode;
     };
@@ -61,14 +61,27 @@ const tokenize = (source: string): TokenizeResult => {
     const position = i;
 
     const twoChar = source.slice(i, i + 2);
-    if (twoChar === '==' || twoChar === '!=' || twoChar === '&&' || twoChar === '||') {
+    if (
+      twoChar === '==' ||
+      twoChar === '!=' ||
+      twoChar === '&&' ||
+      twoChar === '||' ||
+      twoChar === '>=' ||
+      twoChar === '<='
+    ) {
       tokens.push({ type: 'operator', value: twoChar, position });
       i += 2;
       continue;
     }
 
-    if (char === '!' || char === '(' || char === ')') {
-      tokens.push({ type: char === '!' ? 'operator' : 'paren', value: char, position });
+    if (char === '!' || char === '>' || char === '<') {
+      tokens.push({ type: 'operator', value: char, position });
+      i += 1;
+      continue;
+    }
+
+    if (char === '(' || char === ')') {
+      tokens.push({ type: 'paren', value: char, position });
       i += 1;
       continue;
     }
@@ -289,8 +302,37 @@ const parse = (source: string): AstResult => {
     return parsePrimary();
   };
 
-  const parseEquality = (): AstResult => {
+  const parseComparison = (): AstResult => {
     let left = parseUnary();
+    if (!left.ok) {
+      return left;
+    }
+    while (
+      peek().type === 'operator' &&
+      (peek().value === '>' ||
+        peek().value === '<' ||
+        peek().value === '>=' ||
+        peek().value === '<=')
+    ) {
+      const operatorToken = consume();
+      const op = operatorToken.value;
+      if (op !== '>' && op !== '<' && op !== '>=' && op !== '<=') {
+        return fail('Invalid operator', operatorToken.position);
+      }
+      const right = parseUnary();
+      if (!right.ok) {
+        return right;
+      }
+      left = {
+        ok: true,
+        ast: { type: 'binary', operator: op, left: left.ast, right: right.ast },
+      };
+    }
+    return left;
+  };
+
+  const parseEquality = (): AstResult => {
+    let left = parseComparison();
     if (!left.ok) {
       return left;
     }
@@ -299,7 +341,7 @@ const parse = (source: string): AstResult => {
       if (operatorToken.value !== '==' && operatorToken.value !== '!=') {
         return fail('Invalid operator', operatorToken.position);
       }
-      const right = parseUnary();
+      const right = parseComparison();
       if (!right.ok) {
         return right;
       }
@@ -526,6 +568,48 @@ const evaluateAst = (node: AstNode, context: ExpressionContext): ExpressionResul
         }
         return evaluateAst(node.right, context);
       }
+      if (
+        node.operator === '>' ||
+        node.operator === '<' ||
+        node.operator === '>=' ||
+        node.operator === '<='
+      ) {
+        const left = evaluateAst(node.left, context);
+        if (!left.ok) {
+          return left;
+        }
+        const right = evaluateAst(node.right, context);
+        if (!right.ok) {
+          return right;
+        }
+        if (typeof left.value !== 'number' || typeof right.value !== 'number') {
+          return {
+            ok: false,
+            error: {
+              code: 'unsupported-syntax',
+              message: 'Comparison operators require numeric operands',
+            },
+          };
+        }
+        switch (node.operator) {
+          case '>':
+            return { ok: true, value: left.value > right.value };
+          case '<':
+            return { ok: true, value: left.value < right.value };
+          case '>=':
+            return { ok: true, value: left.value >= right.value };
+          case '<=':
+            return { ok: true, value: left.value <= right.value };
+          default:
+            return {
+              ok: false,
+              error: {
+                code: 'unsupported-syntax',
+                message: 'Unsupported expression syntax',
+              },
+            };
+        }
+      }
       const left = evaluateAst(node.left, context);
       if (!left.ok) {
         return left;
@@ -533,6 +617,15 @@ const evaluateAst = (node: AstNode, context: ExpressionContext): ExpressionResul
       const right = evaluateAst(node.right, context);
       if (!right.ok) {
         return right;
+      }
+      if (node.operator !== '==' && node.operator !== '!=') {
+        return {
+          ok: false,
+          error: {
+            code: 'unsupported-syntax',
+            message: 'Unsupported expression syntax',
+          },
+        };
       }
       const comparison = isEqual(left.value, right.value);
       return { ok: true, value: node.operator === '==' ? comparison : !comparison };

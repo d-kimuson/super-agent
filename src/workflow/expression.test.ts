@@ -194,3 +194,54 @@ describe('evaluateExpression - function calls', () => {
     expect(getValue(result)).toBe(true);
   });
 });
+
+describe('evaluateExpression - comparison operators', () => {
+  it('evaluates > with numbers', () => {
+    expect(getValue(evaluateExpression({ expression: '10 > 2', context }))).toBe(true);
+    expect(getValue(evaluateExpression({ expression: '2 > 10', context }))).toBe(false);
+    expect(getValue(evaluateExpression({ expression: '5 > 5', context }))).toBe(false);
+  });
+
+  it('evaluates < with numbers', () => {
+    expect(getValue(evaluateExpression({ expression: '2 < 10', context }))).toBe(true);
+    expect(getValue(evaluateExpression({ expression: '10 < 2', context }))).toBe(false);
+    expect(getValue(evaluateExpression({ expression: '1 < 0', context }))).toBe(false);
+  });
+
+  it('evaluates >= with numbers', () => {
+    expect(getValue(evaluateExpression({ expression: '10 >= 10', context }))).toBe(true);
+    expect(getValue(evaluateExpression({ expression: '11 >= 10', context }))).toBe(true);
+    expect(getValue(evaluateExpression({ expression: '9 >= 10', context }))).toBe(false);
+  });
+
+  it('evaluates <= with numbers', () => {
+    expect(getValue(evaluateExpression({ expression: '10 <= 10', context }))).toBe(true);
+    expect(getValue(evaluateExpression({ expression: '9 <= 10', context }))).toBe(true);
+    expect(getValue(evaluateExpression({ expression: '11 <= 10', context }))).toBe(false);
+  });
+
+  it('evaluates comparison with path references', () => {
+    expect(getValue(evaluateExpression({ expression: 'inputs.count > 1', context }))).toBe(true);
+    expect(getValue(evaluateExpression({ expression: 'inputs.count <= 2', context }))).toBe(true);
+  });
+
+  it('errors when operands are not numbers', () => {
+    const result = evaluateExpression({ expression: '"10" > 2', context });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('unsupported-syntax');
+      expect(result.error.message).toBe('Comparison operators require numeric operands');
+    }
+  });
+
+  it('errors when comparing boolean to number', () => {
+    const result = evaluateExpression({ expression: 'true > 0', context });
+    expect(result.ok).toBe(false);
+  });
+
+  it('supports comparison in conditions', () => {
+    const result = evaluateCondition({ expression: 'inputs.count > 1', context });
+    expect(result.ok).toBe(true);
+    expect(getValue(result)).toBe(true);
+  });
+});
