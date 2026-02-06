@@ -67,6 +67,13 @@ export const CodexAgentSDKAdapter = (): AgentSDKAdapter => {
       try {
         const result = await thread.runStreamed(session.currentTurn.prompt, {
           signal: abortController.signal,
+          outputSchema:
+            session.currentTurn.outputSchema === undefined
+              ? undefined
+              : {
+                  ...session.currentTurn.outputSchema,
+                  additionalProperties: false,
+                },
         });
 
         let threadId: string | undefined = undefined;
@@ -123,10 +130,16 @@ export const CodexAgentSDKAdapter = (): AgentSDKAdapter => {
                 throw new Error('lastMessage must be defined');
               }
 
+              const structuredOutput: unknown =
+                session.currentTurn.outputSchema === undefined
+                  ? undefined
+                  : JSON.parse(lastMessage);
+
               const nextTurn: CompletedTurn = {
                 ...session.currentTurn,
                 status: 'completed',
                 output: lastMessage,
+                structuredOutput,
               };
 
               const nextSession: PausedSession = {

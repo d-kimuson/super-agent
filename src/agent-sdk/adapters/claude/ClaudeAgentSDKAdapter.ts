@@ -58,6 +58,13 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
         disallowedTools: [
           'AskUserQuestion', // TUI でないと返答不可
         ],
+        outputFormat:
+          session.currentTurn.outputSchema === undefined
+            ? undefined
+            : {
+                type: 'json_schema',
+                schema: session.currentTurn.outputSchema,
+              },
         permissionMode: 'bypassPermissions', // TODO: 承認機能も欲しい感
         ...(session.status === 'running'
           ? { resume: session.sdkSessionId, forkSession: true }
@@ -112,6 +119,7 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
                 ...session.currentTurn,
                 status: 'completed',
                 output: message.result,
+                structuredOutput: message.structured_output,
               };
 
               const nextSession: PausedSession = {

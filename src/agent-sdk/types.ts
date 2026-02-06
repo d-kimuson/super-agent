@@ -1,3 +1,4 @@
+import { type StandardJSONSchemaV1 } from '@standard-schema/spec';
 import { type claudeModels } from './adapters/claude/constants';
 import { type codexModels } from './adapters/codex/constants';
 import { type copilotModels } from './adapters/copilot/constants';
@@ -32,6 +33,7 @@ export type QueuedTurn = BaseTurn & {
   status: 'queued';
   prompt: string;
   model?: string;
+  outputSchema?: Record<string, unknown>;
 };
 
 export type CompletedTurn = BaseTurn & {
@@ -39,6 +41,11 @@ export type CompletedTurn = BaseTurn & {
   prompt: string;
   output: string;
   model?: string;
+  outputSchema?: Record<string, unknown>;
+  /**
+   * @deprecated Copilot CLI では利用できないのでサポートするまで非推奨
+   */
+  structuredOutput?: unknown;
 };
 
 export type FailedTurn = BaseTurn & {
@@ -46,6 +53,7 @@ export type FailedTurn = BaseTurn & {
   prompt: string;
   model?: string;
   error: unknown;
+  outputSchema?: Record<string, unknown>;
 };
 
 /**
@@ -127,10 +135,12 @@ export type Session =
   | CompletedSession
   | FailedSession;
 
-export type StartSessionInput = AgentModel & {
-  prompt: string;
-  cwd: string;
-};
+export type StartSessionInput<T extends StandardJSONSchemaV1 | undefined = undefined> =
+  AgentModel & {
+    prompt: string;
+    cwd: string;
+    outputSchema?: T;
+  };
 
 export type ContinueSessionInput = {
   sdkSessionId: string;

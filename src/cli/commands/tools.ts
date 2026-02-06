@@ -7,11 +7,11 @@ import { env } from '../../config/env';
 import { loadContext } from '../../config/loadContext';
 import { cliArgsSchema, providersSchema } from '../../config/schema';
 import { AgentToolsService } from '../../core/AgentToolsService';
+import { runWorkflow } from '../../experimental/workflow-yaml/engine';
+import { mergeInputs } from '../../experimental/workflow-yaml/inputs';
+import { loadWorkflowFromYaml } from '../../experimental/workflow-yaml/loader';
+import { resolveWorkflowPath } from '../../experimental/workflow-yaml/resolveWorkflowPath';
 import { logger } from '../../lib/logger';
-import { runWorkflow } from '../../workflow/engine';
-import { mergeInputs } from '../../workflow/inputs';
-import { loadWorkflowFromYaml } from '../../workflow/loader';
-import { resolveWorkflowPath } from '../../workflow/resolveWorkflowPath';
 
 type GlobalOptions = {
   ssaDir?: string;

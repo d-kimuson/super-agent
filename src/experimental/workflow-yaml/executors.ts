@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
-import { AgentSdk } from '../agent-sdk/AgentSdk';
-import { createControllablePromise } from '../lib/controllablePromise';
-import { errorToString } from '../lib/errorToString';
+import { AgentSdk } from '../../agent-sdk/AgentSdk';
+import { createControllablePromise } from '../../lib/controllablePromise';
+import { errorToString } from '../../lib/errorToString';
 import { type StepRunners } from './types';
 
 const chunkToString = (chunk: unknown) => {

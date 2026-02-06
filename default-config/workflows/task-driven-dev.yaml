@@ -1,0 +1,251 @@
+id: task-driven-dev
+name: task-driven-dev
+inputs:
+  ticket:
+    type: string
+    default: ''
+  completion-type:
+    type: string
+    default: local
+  main-branch:
+    type: string
+    default: main
+  ci-sleep-seconds:
+    type: number
+    default: 30
+steps:
+  - id: prepare-task
+    name: Stash / Pull / Install / Task ID
+    execute:
+      type: shell
+      run: |
+        set -euo pipefail
+
+        git stash push -u -m "sa-workflow-$(date +%Y%m%d-%H%M%S)" >/dev/null 2>&1 || true
+        git switch "${{ inputs.main-branch }}" >&2
+        git pull --ff-only >&2
+        pnpm install --ignore-scripts --frozen-lockfile >&2
+
+        task_id="$(uuidgen | tr 'A-Z' 'a-z')"
+        printf '%s\n' "$task_id"
+
+  - id: explore-and-branch
+    name: Explore ticket / find files / create branch
+    needs: [prepare-task]
+    execute:
+      type: agent
+      sdkType: claude
+      model: sonnet
+      prompt: |
+        あなたはリポジトリ内で自走する実装担当です。以下を順番に実施してください。
+
+        1) チケット情報の要約
+        - 入力: ${{ inputs.ticket }}
+        - URL や識別子が空なら、その旨を短く書いてください。
+
+        2) 関連ファイルの探索
+        - rg / git grep / ls / cat を使い、関連しそうなファイルや既存パターンを特定してください。
+        - 探索結果は根拠となるファイルパスを必ず含めてください。
+
+        3) ブランチ作成
+        - task id: ${{ trim(steps.prepare-task.stdout) }}
+        - 次のブランチ名を作成してください: task/${{ trim(steps.prepare-task.stdout) }}
+        - 実行コマンド: git switch -c task/${{ trim(steps.prepare-task.stdout) }}
+
+        4) 出力フォーマット
+        - 以降で task document の Context にそのまま貼れる Markdown を出力してください。
+        - 見出しは次を使ってください:
+          - ## Ticket
+          - ## Findings
+          - ## Branch
+
+  - id: design-plan
+    name: Strong-model design based on findings
+    needs: [explore-and-branch]
+    execute:
+      type: agent
+      sdkType: claude
+      model: opus
+      prompt: |
+        以下は exploration の結果です:
+        ---
+        ${{ steps.explore-and-branch.output }}
+        ---
+
+        上記を踏まえて、実装の設計を行ってください。
+
+        要件:
+        - 変更対象のファイルを具体的に列挙
+        - 既存パターンや制約に沿う
+        - リスクとテスト方針を含める
+        - 最終的に implementation agent がそのまま実行できる粒度の手順に分解
+
+        出力フォーマット:
+        - task document の Plan にそのまま貼れる Markdown
+        - 見出しは ## Plan を先頭にしてください
+
+  - id: write-task-doc
+    name: Create task document from template
+    needs: [prepare-task, explore-and-branch, design-plan]
+    execute:
+      type: shell
+      run: |
+        set -euo pipefail
+
+        task_id="${{ trim(steps.prepare-task.stdout) }}"
+        task_doc_path=".super-agent/tasks/${task_id}.md"
+        mkdir -p "$(dirname "$task_doc_path")"
+        created_at="$(date -Iseconds)"
+
+        cat <<'DOC' > "$task_doc_path"
+        # Task ${{ trim(steps.prepare-task.stdout) }}
+
+        ## Context
+        ${{ steps.explore-and-branch.output }}
+
+        ${{ steps.design-plan.output }}
+
+        ## Notes
+        - completion-type: ${{ inputs.completion-type }}
+        - ticket: ${{ inputs.ticket }}
+        DOC
+
+        printf '%s\n' "- created-at: ${created_at}" >> "$task_doc_path"
+
+        printf '%s\n' "$task_doc_path"
+
+  - id: implementation-loop
+    name: Implement -> Review until approved
+    needs: [write-task-doc]
+    execute:
+      type: loop
+      max: 6
+      until: ${{ steps.review.structured.approved == true }}
+      steps:
+        - id: implement
+          name: Implementation agent
+          execute:
+            type: agent
+            sdkType: claude
+            model: sonnet
+            prompt: |
+              あなたは implementation agent です。次を実施してください。
+
+              1) タスク文書を読む
+              - path: ${{ trim(steps.write-task-doc.stdout) }}
+              - Context / Plan / Notes を必ず確認する
+
+              2) 実装
+              - Plan に沿って最小変更で実装する
+              - 既存のスタイル・パターンに合わせる
+              - 必要なら Plan / Notes を更新して構わない
+
+              3) 検証 (Done の定義)
+              - pnpm fix
+              - pnpm typecheck
+              - pnpm test
+              - 失敗したら原因を直し、再実行する
+
+              4) 出力
+              - 実施内容 / 変更ファイル / テスト結果を簡潔に Markdown でまとめる
+
+        - id: review
+          name: Review agent (JSON contract)
+          needs: [implement]
+          execute:
+            type: agent
+            sdkType: claude
+            model: opus
+            structured:
+              approved: false
+              feedback: ''
+            prompt: |
+              あなたは reviewer です。実装をレビューし、必要なら修正指示を出します。
+
+              まず次を必ず実行してください:
+              - git status --short
+              - git diff
+
+              レビュー観点:
+              - 仕様逸脱 / 回帰 / 破壊的変更
+              - エラーハンドリング
+              - テストの不足
+              - 変更の過不足 (最小変更か)
+
+              重要:
+              - レビュー結果はタスク文書にも追記してください。
+                - path: ${{ trim(steps.write-task-doc.stdout) }}
+                - 末尾に "## Review Feedback" セクションを追加/更新
+
+              出力は必ず JSON のみ:
+              {
+                "approved": true | false,
+                "feedback": "修正が必要な場合は具体的な指示。不要なら空文字"
+              }
+
+  - id: create-draft-pr
+    name: Create draft PR when not local
+    needs: [implementation-loop]
+    if: ${{ inputs.completion-type != 'local' }}
+    execute:
+      type: shell
+      run: |
+        set -euo pipefail
+
+        current_branch="$(git rev-parse --abbrev-ref HEAD)"
+        task_doc_path="${{ trim(steps.write-task-doc.stdout) }}"
+        ticket="${{ inputs.ticket }}"
+
+        if [ "$current_branch" = "${{ inputs.main-branch }}" ]; then
+          echo "Refusing to open PR from main branch" >&2
+          exit 1
+        fi
+
+        title="${current_branch}"
+        if [ -n "$ticket" ]; then
+          title="${title} ${ticket}"
+        fi
+
+        gh pr create --draft \
+          --title "$title" \
+          --body-file "$task_doc_path"
+
+  - id: wait-ci-checks
+    name: Wait for CI checks when requested
+    needs: [implementation-loop, create-draft-pr]
+    if: ${{ inputs.completion-type == 'ci-checks' }}
+    execute:
+      type: loop
+      max: 60
+      until: ${{ trim(steps.ci-checks.stdout) == '1' }}
+      steps:
+        - id: ci-checks
+          name: Poll PR checks
+          execute:
+            type: shell
+            run: |
+              set -euo pipefail
+
+              status="$(gh pr view --json statusCheckRollup --jq '
+                def conclusion(x): (x.conclusion // x.state // "");
+                def done(x): (conclusion(x) == "SUCCESS" or conclusion(x) == "SKIPPED" or conclusion(x) == "NEUTRAL");
+                if (.statusCheckRollup | length) == 0 then
+                  "0"
+                elif ([.statusCheckRollup[] | done(.)] | all) then
+                  "1"
+                else
+                  "0"
+                end
+              ')"
+
+              printf '%s\n' "$status"
+
+        - id: ci-wait
+          name: Sleep between polls
+          needs: [ci-checks]
+          if: ${{ trim(steps.ci-checks.stdout) != '1' }}
+          execute:
+            type: shell
+            run: |
+              set -euo pipefail
+              sleep ${{ inputs.ci-sleep-seconds }}

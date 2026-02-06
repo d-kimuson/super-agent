@@ -1,3 +1,4 @@
+import { type StandardJSONSchemaV1 } from '@standard-schema/spec';
 import { ClaudeAgentSDKAdapter } from './adapters/claude/ClaudeAgentSDKAdapter';
 import { CodexAgentSDKAdapter } from './adapters/codex/CodexAgentSDKAdapterService';
 import { CopilotAgentSDKAdapter } from './adapters/copilot/CopilotAgentSDKAdapterService';
@@ -66,15 +67,25 @@ export const AgentSdk = () => {
   /**
    * セッションを開始する
    */
-  const startSession = async (input: StartSessionInput) => {
+  const startSession = async <const O extends StandardJSONSchemaV1 | undefined>(
+    input: StartSessionInput<O>,
+  ) => {
     const adapter = getAdapter(input.sdkType);
     const taskId = crypto.randomUUID();
+
+    const jsonSchema =
+      input.outputSchema === undefined
+        ? undefined
+        : input.outputSchema['~standard'].jsonSchema.input({
+            target: 'draft-07',
+          });
 
     const queuedTurn: QueuedTurn = {
       id: taskId,
       status: 'queued',
       prompt: input.prompt,
       model: input.model,
+      outputSchema: jsonSchema,
     };
 
     const pendingSession: PendingSession = {

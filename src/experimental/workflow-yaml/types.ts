@@ -1,4 +1,4 @@
-import { type SdkType } from '../agent-sdk/types';
+import { type SdkType } from '../../agent-sdk/types';
 
 export type InputDef = {
   type: 'boolean' | 'string' | 'number' | 'integer' | 'object' | 'array';

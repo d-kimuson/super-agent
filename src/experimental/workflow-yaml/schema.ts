@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { providersSchema } from '../config/schema';
+import { providersSchema } from '../../config/schema';
 import {
   type OnError,
   type RetryStrategy,
