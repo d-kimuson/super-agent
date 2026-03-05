@@ -1,4 +1,5 @@
 import { type StandardJSONSchemaV1 } from '@standard-schema/spec';
+import { type InferStandardJSONSchema } from '../lib/types';
 import { ClaudeAgentSDKAdapter } from './adapters/claude/ClaudeAgentSDKAdapter';
 import { CodexAgentSDKAdapter } from './adapters/codex/CodexAgentSDKAdapterService';
 import { CopilotAgentSDKAdapter } from './adapters/copilot/CopilotAgentSDKAdapterService';
@@ -102,10 +103,24 @@ export const AgentSdk = () => {
     onSessionStarted(input.sdkType)(session);
     void stopped.then(onSessionStopped);
 
+    const typedStopped = stopped.then((pausedOrFailed) => {
+      if (pausedOrFailed.status === 'failed') return pausedOrFailed;
+      if (pausedOrFailed.currentTurn.status === 'failed') return pausedOrFailed;
+
+      // eslint-disable-next-line no-unsafe-type-assertion
+      return pausedOrFailed as Omit<PausedSession, 'currentTurn'> & {
+        currentTurn: Omit<typeof pausedOrFailed.currentTurn, 'structuredOutput'> & {
+          structuredOutput: O extends StandardJSONSchemaV1
+            ? InferStandardJSONSchema<O>['parsed']
+            : undefined;
+        };
+      };
+    });
+
     return {
       code: 'success',
       session,
-      stopped,
+      stopped: typedStopped,
     } as const;
   };
 

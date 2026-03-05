@@ -156,7 +156,7 @@ export const CopilotAgentSDKAdapter = (): AgentSDKAdapter => {
   };
 
   return {
-    startSession: async (pendingSession) => {
+    startSession: async (pendingSession, options) => {
       await ensureClientStarted();
 
       const sdkSessionId = crypto.randomUUID();
@@ -169,6 +169,7 @@ export const CopilotAgentSDKAdapter = (): AgentSDKAdapter => {
 
       const copilotSession = await client.createSession({
         ...sessionConfig,
+        ...options?.adapterOptions?.copilot,
         sessionId: sdkSessionId,
         model: session.currentTurn.model ?? 'default',
       });
@@ -241,7 +242,7 @@ export const CopilotAgentSDKAdapter = (): AgentSDKAdapter => {
       };
     },
 
-    resumeSession: async (resumeSession) => {
+    resumeSession: async (resumeSession, options) => {
       // Validate that sdkSessionId exists
       if (resumeSession.sdkSessionId === undefined) {
         return {
@@ -251,13 +252,19 @@ export const CopilotAgentSDKAdapter = (): AgentSDKAdapter => {
 
       await ensureClientStarted();
 
-      const copilotSession = await client.resumeSession(resumeSession.sdkSessionId, sessionConfig);
+      const copilotSession = await client.resumeSession(resumeSession.sdkSessionId, {
+        ...sessionConfig,
+        ...options?.adapterOptions?.copilot,
+      });
 
       const { stoppedPromise } = copilotRun(resumeSession, copilotSession);
 
       const daemon = async () => {
         try {
-          await copilotSession.send({ prompt: resumeSession.currentTurn.prompt });
+          await copilotSession.send({
+            prompt: resumeSession.currentTurn.prompt,
+            mode: 'immediate',
+          });
         } catch (error) {
           logger.error('Failed to send prompt', error);
 

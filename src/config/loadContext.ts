@@ -12,7 +12,7 @@ import {
   type ParsedEnvVars,
   parsedEnvVarsSchema,
 } from './schema';
-import { type Context } from './types';
+import { type CliContext } from './types';
 
 export type LoadContextOptions = {
   cliArgs?: Partial<CliArgs>;
@@ -122,7 +122,7 @@ const mergeConfig = (
  * Context を読み込む
  * Config を読み込み、agents と skills をマージ
  */
-export const loadContext = async (options: LoadContextOptions = {}): Promise<Context> => {
+export const loadContext = async (options: LoadContextOptions = {}): Promise<CliContext> => {
   const cliArgs = options.cliArgs ?? {};
   const rawEnvVars = options.envVars ?? {};
 

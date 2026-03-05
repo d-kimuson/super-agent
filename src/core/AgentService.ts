@@ -1,16 +1,14 @@
+import { type StandardJSONSchemaV1 } from '@standard-schema/spec';
 import { z } from 'zod';
 import { AgentSdk } from '../agent-sdk/AgentSdk';
 import { type FailedSession, type PausedSession } from '../agent-sdk/types';
-import { type AgentModel, providersSchema } from '../config/schema';
-import { type Context } from '../config/types';
+import { type AgentModel } from '../config/schema';
+import { type CliContext } from '../config/types';
+import { type InferStandardJSONSchema } from '../lib/types';
 import { composePrompt } from './composePrompt';
 import { selectModel } from './selectModel';
 import { stoppedSessionToResult } from './stoppedSessionToResult';
 import { type ToolResult } from './types';
-
-const agentTaskOutputSchema = z.object({
-  sessionId: z.string(),
-});
 
 type AgentTaskRawResult =
   | { success: true; sessionId: string; sdkType: AgentModel['sdkType']; output: string }
@@ -22,7 +20,7 @@ type ResolveAgentSuccess = {
   model: AgentModel;
 };
 
-type ToolError = Extract<ToolResult, { success: false }>;
+type ToolError = Extract<ToolResult<unknown>, { status: 'failed' }>;
 
 type ResolveAgentFailure = {
   ok: false;
@@ -31,7 +29,21 @@ type ResolveAgentFailure = {
 
 type ResolveAgentResult = ResolveAgentSuccess | ResolveAgentFailure;
 
-export const AgentService = (context: Context) => {
+type AgentTaskArgs<O extends StandardJSONSchemaV1 | undefined> = {
+  agentType?: string;
+  prompt: string;
+  cwd: string;
+  resume?: string;
+  runInBackground?: boolean;
+  disabledSdkTypes?: AgentModel['sdkType'][];
+  outputSchema?: O;
+};
+
+type AgentTaskOutputArgs = {
+  sessionId: string;
+};
+
+export const AgentService = (context: CliContext) => {
   const { agents, skills, config } = context;
 
   const backgroundTaskMap = new Map<
@@ -43,28 +55,11 @@ export const AgentService = (context: Context) => {
 
   const agentNames = agents.map((agent) => agent.name);
 
-  const agentTaskArgsSchema = z.object({
-    agentType: z.enum(agentNames).optional().describe('The agent to use for this task'),
-    prompt: z.string().describe('The instruction/prompt for the agent'),
-    cwd: z.string().describe('The working directory for the agent'),
-    resume: z
-      .string()
-      .optional()
-      .describe('Optional session ID to continue from a previous conversation'),
-    runInBackground: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe('Whether to run the task in the background'),
-    disabledSdkTypes: z
-      .array(providersSchema)
-      .optional()
-      .describe(
-        'SDK types to exclude from selection. Useful for falling back to other providers when encountering rate limits or network errors',
-      ),
-  });
+  const agentTypeSchema = z.enum(agentNames).optional().describe('The agent to use for this task');
 
-  const resolveAgent = (input: z.infer<typeof agentTaskArgsSchema>): ResolveAgentResult => {
+  const resolveAgent = <const O extends StandardJSONSchemaV1 | undefined>(
+    input: AgentTaskArgs<O>,
+  ): ResolveAgentResult => {
     const matchAgent =
       agents.find(({ name }) => name === input.agentType) ??
       agents.find(({ name }) => name === 'general');
@@ -73,11 +68,11 @@ export const AgentService = (context: Context) => {
       return {
         ok: false,
         error: {
-          success: false,
+          status: 'failed',
           code: 'agent-not-found',
           message: `Agent not found: ${input.agentType}`,
         },
-      };
+      } as const;
     }
 
     const modelResult = selectModel({
@@ -90,11 +85,11 @@ export const AgentService = (context: Context) => {
       return {
         ok: false,
         error: {
-          success: false,
+          status: 'failed',
           code: 'agent-model-not-found',
           message: `No available model for agent "${input.agentType}". ${modelResult.message}`,
         },
-      };
+      } as const;
     }
 
     const composedPrompt = composePrompt({
@@ -107,14 +102,21 @@ export const AgentService = (context: Context) => {
       ok: true,
       prompt: composedPrompt,
       model: modelResult.model,
-    };
+    } as const;
   };
 
-  const agentTask = async (input: z.infer<typeof agentTaskArgsSchema>): Promise<ToolResult> => {
+  const agentTask = async <
+    const O extends StandardJSONSchemaV1 | undefined,
+    StructuredOutput extends { raw: unknown; parsed: unknown } = O extends StandardJSONSchemaV1
+      ? InferStandardJSONSchema<O>
+      : { raw: unknown; parsed: unknown },
+  >(
+    input: AgentTaskArgs<O>,
+  ): Promise<ToolResult<StructuredOutput['parsed']>> => {
     const resolved = resolveAgent(input);
-    if (!resolved.ok) {
+    if (resolved.ok === false) {
       return {
-        success: false,
+        status: 'failed',
         code: resolved.error.code,
         message: resolved.error.message,
         sessionId: resolved.error.sessionId,
@@ -141,7 +143,7 @@ export const AgentService = (context: Context) => {
 
     if (result.code !== 'success') {
       return {
-        success: false,
+        status: 'failed',
         code: result.code,
         message: `Failed to start task: ${result.code}`,
       };
@@ -153,9 +155,9 @@ export const AgentService = (context: Context) => {
       promise: result.stopped,
     });
 
-    if (input.runInBackground) {
+    if (input.runInBackground ?? false) {
       return {
-        success: true,
+        status: 'run-in-background',
         sessionId: result.session.sdkSessionId,
         message: `Task started in background. Resolved Sdk Type: ${result.session.sdkType}. Session ID: ${result.session.sdkSessionId}`,
         sdkType: result.session.sdkType,
@@ -166,13 +168,11 @@ export const AgentService = (context: Context) => {
     return stoppedSessionToResult(stopped);
   };
 
-  const agentTaskOutput = async (
-    input: z.infer<typeof agentTaskOutputSchema>,
-  ): Promise<ToolResult> => {
+  const agentTaskOutput = async (input: AgentTaskOutputArgs): Promise<ToolResult<unknown>> => {
     const task = backgroundTaskMap.get(input.sessionId);
     if (task === undefined) {
       return {
-        success: false,
+        status: 'failed',
         code: 'task-not-found',
         message: `Task not found: ${input.sessionId}`,
       };
@@ -183,9 +183,8 @@ export const AgentService = (context: Context) => {
   };
 
   return {
-    agentTaskArgsSchema,
+    agentTypeSchema,
     agentTask,
-    agentTaskOutputSchema,
     agentTaskOutput,
   };
 };

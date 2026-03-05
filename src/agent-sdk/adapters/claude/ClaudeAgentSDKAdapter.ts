@@ -12,7 +12,7 @@ import {
   type FailedSession,
   type PendingSession,
 } from '../../types';
-import { type AgentSDKAdapter } from '../types';
+import { type AdapterOptions, type AgentSDKAdapter } from '../types';
 import { createMessageGenerator, type MessageGenerator } from './createMessageGenerator';
 
 type PendingSessionProcess = {
@@ -34,7 +34,18 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
   const processMap = new Map<string, SessionProcess>();
   let isCleanedUp = false;
 
-  const claudeCodeRun = (session: PendingSession | RunningSession) => {
+  const claudeCodeRun = (
+    session: PendingSession | RunningSession,
+    claudeCodeOptions?: AdapterOptions['claudeCode'],
+  ) => {
+    const {
+      systemPrompt = {
+        type: 'preset',
+        preset: 'claude_code',
+      },
+      settingSources = ['user', 'project', 'local'],
+      disallowedTools = [],
+    } = claudeCodeOptions ?? {};
     const abortController = new AbortController();
     const messageGenerator = createMessageGenerator();
 
@@ -52,10 +63,14 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
     const messageIter = claudeAgentSdk.query({
       prompt: messageGenerator.generateMessages(),
       options: {
+        ...claudeCodeOptions,
+        systemPrompt,
+        settingSources,
         abortController,
         cwd: session.cwd,
         model: session.currentTurn.model ?? 'default',
         disallowedTools: [
+          ...disallowedTools,
           'AskUserQuestion', // TUI でないと返答不可
         ],
         outputFormat:
@@ -65,7 +80,7 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
                 type: 'json_schema',
                 schema: session.currentTurn.outputSchema,
               },
-        permissionMode: 'bypassPermissions', // TODO: 承認機能も欲しい感
+        permissionMode: 'bypassPermissions',
         ...(session.status === 'running'
           ? { resume: session.sdkSessionId, forkSession: true }
           : {}),
@@ -183,8 +198,11 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
   };
 
   return {
-    startSession: async (pendingSession) => {
-      const { messageGenerator, startedPromise, stoppedPromise } = claudeCodeRun(pendingSession);
+    startSession: async (pendingSession, options) => {
+      const { messageGenerator, startedPromise, stoppedPromise } = claudeCodeRun(
+        pendingSession,
+        options?.adapterOptions?.claudeCode,
+      );
 
       messageGenerator.setNextMessage({
         text: pendingSession.firstPrompt,
@@ -231,7 +249,7 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
     },
 
     // eslint-disable-next-line require-await
-    resumeSession: async (resumeSession) => {
+    resumeSession: async (resumeSession, options) => {
       // Validate that sdkSessionId exists
       if (resumeSession.sdkSessionId === undefined) {
         return {
@@ -239,7 +257,10 @@ export const ClaudeAgentSDKAdapter = (): AgentSDKAdapter => {
         };
       }
 
-      const { messageGenerator, stoppedPromise } = claudeCodeRun(resumeSession);
+      const { messageGenerator, stoppedPromise } = claudeCodeRun(
+        resumeSession,
+        options?.adapterOptions?.claudeCode,
+      );
 
       // 最初のユーザーメッセージを送信してconversationを再開
       messageGenerator.setNextMessage({

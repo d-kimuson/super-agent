@@ -2,7 +2,9 @@ import { type PausedSession, type FailedSession } from '../agent-sdk/types';
 import { errorToString } from '../lib/errorToString';
 import { type ToolResult } from './types';
 
-export const stoppedSessionToResult = (session: PausedSession | FailedSession): ToolResult => {
+export const stoppedSessionToResult = (
+  session: PausedSession | FailedSession,
+): ToolResult<unknown> => {
   const sdkSessionId = session.sdkSessionId ?? '';
   const resumeMessage =
     sdkSessionId.length > 0
@@ -14,15 +16,17 @@ export const stoppedSessionToResult = (session: PausedSession | FailedSession): 
   if (session.status === 'paused') {
     if (session.currentTurn.status === 'completed') {
       return {
-        success: true,
+        status: 'success',
         message: session.currentTurn.output + '\n\n---\n\n' + resumeMessage,
         sessionId: sdkSessionId,
         sdkType: session.sdkType,
+        // eslint-disable-next-line no-deprecated
+        structured: session.currentTurn.structuredOutput,
       };
     } else {
       const errorMessage = `An error occurred: ${errorToString(session.currentTurn.error)}`;
       return {
-        success: false,
+        status: 'failed',
         code: 'turn-failed',
         message: `${errorMessage}\n\n---\n\n${fallbackMessage}\n\n${resumeMessage}`,
         sessionId: sdkSessionId,
@@ -32,7 +36,7 @@ export const stoppedSessionToResult = (session: PausedSession | FailedSession): 
 
   const errorMessage = `An error occurred: ${errorToString(session.error)}`;
   return {
-    success: false,
+    status: 'failed',
     code: 'session-failed',
     message:
       resumeMessage.length > 0

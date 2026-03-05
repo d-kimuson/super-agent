@@ -12,9 +12,9 @@ import {
   type FailedSession,
   type PendingSession,
 } from '../../types';
-import { type AgentSDKAdapter } from '../types';
+import { type AdapterOptions, type AgentSDKAdapter } from '../types';
 
-const threadOptions: ThreadOptions = {
+const baseThreadOptions: ThreadOptions = {
   skipGitRepoCheck: true,
   sandboxMode: 'danger-full-access',
   approvalPolicy: 'never',
@@ -40,19 +40,27 @@ export const CodexAgentSDKAdapter = (): AgentSDKAdapter => {
   const processMap = new Map<string, SessionProcess>();
   let isCleanedUp = false;
 
-  const codexRun = (session: PendingSession | RunningSession) => {
+  const codexRun = (
+    session: PendingSession | RunningSession,
+    codexOptions?: AdapterOptions['codex'],
+  ) => {
     const abortController = new AbortController();
 
     const startedPromise = createControllablePromise<RunningSession>();
     const stoppedPromise = createControllablePromise<PausedSession | FailedSession>();
+
+    const threadOptions: ThreadOptions = {
+      ...baseThreadOptions,
+      ...codexOptions?.thread,
+      model: session.currentTurn.model,
+      workingDirectory: session.cwd,
+    };
 
     const thread =
       session.status === 'running'
         ? codex.resumeThread(session.sdkSessionId, threadOptions)
         : codex.startThread({
             ...threadOptions,
-            model: session.currentTurn.model,
-            workingDirectory: session.cwd,
           });
 
     let currentProcess: SessionProcess = {
@@ -66,6 +74,7 @@ export const CodexAgentSDKAdapter = (): AgentSDKAdapter => {
     const daemon = async () => {
       try {
         const result = await thread.runStreamed(session.currentTurn.prompt, {
+          ...codexOptions?.turn,
           signal: abortController.signal,
           outputSchema:
             session.currentTurn.outputSchema === undefined
@@ -243,8 +252,11 @@ export const CodexAgentSDKAdapter = (): AgentSDKAdapter => {
   };
 
   return {
-    startSession: async (pendingSession) => {
-      const { startedPromise, stoppedPromise } = codexRun(pendingSession);
+    startSession: async (pendingSession, options) => {
+      const { startedPromise, stoppedPromise } = codexRun(
+        pendingSession,
+        options?.adapterOptions?.codex,
+      );
 
       const runningSession = await startedPromise;
 
@@ -286,7 +298,7 @@ export const CodexAgentSDKAdapter = (): AgentSDKAdapter => {
     },
 
     // eslint-disable-next-line require-await
-    resumeSession: async (resumeSession) => {
+    resumeSession: async (resumeSession, options) => {
       // Validate that sdkSessionId exists
       if (resumeSession.sdkSessionId === undefined) {
         return {
@@ -294,7 +306,7 @@ export const CodexAgentSDKAdapter = (): AgentSDKAdapter => {
         };
       }
 
-      const { stoppedPromise } = codexRun(resumeSession);
+      const { stoppedPromise } = codexRun(resumeSession, options?.adapterOptions?.codex);
 
       return {
         code: 'success',
